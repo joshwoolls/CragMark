@@ -1,0 +1,83 @@
+import React, { useState } from "react";
+import { base44 } from "@/api/base44Client";
+import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
+import { createPageUrl } from "@/utils";
+import { Plus, Search, Mountain, Loader2 } from "lucide-react";
+import RouteCard from "@/components/routes/RouteCard";
+
+export default function Home() {
+  const [search, setSearch] = useState("");
+
+  const { data: routes = [], isLoading } = useQuery({
+    queryKey: ["routes"],
+    queryFn: () => base44.entities.Route.filter({ published: true }, "-created_date", 50),
+  });
+
+  const filtered = routes.filter((r) =>
+    !search || r.name?.toLowerCase().includes(search.toLowerCase()) ||
+    r.grade?.toLowerCase().includes(search.toLowerCase()) ||
+    r.setter_name?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <div className="min-h-screen bg-zinc-950 text-white">
+      {/* Header */}
+      <div className="sticky top-0 z-30 bg-zinc-950/80 backdrop-blur-xl border-b border-zinc-800/50">
+        <div className="max-w-lg mx-auto px-4 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Mountain className="w-6 h-6 text-amber-500" />
+            <span className="text-lg font-bold tracking-tight">RouteSet</span>
+          </div>
+          <Link
+            to={createPageUrl("CreateRoute")}
+            className="bg-amber-500 hover:bg-amber-400 text-white p-2.5 rounded-xl transition-colors shadow-lg shadow-amber-500/20"
+          >
+            <Plus className="w-5 h-5" />
+          </Link>
+        </div>
+      </div>
+
+      <div className="max-w-lg mx-auto px-4 pb-8">
+        {/* Search */}
+        <div className="mt-4 relative">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search routes, grades, setters..."
+            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-600 transition-colors"
+          />
+        </div>
+
+        {/* Routes */}
+        {isLoading ? (
+          <div className="flex justify-center py-20">
+            <Loader2 className="w-6 h-6 animate-spin text-zinc-600" />
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center py-20">
+            <Mountain className="w-12 h-12 text-zinc-800 mx-auto mb-3" />
+            <p className="text-zinc-500 text-sm">
+              {search ? "No routes match your search" : "No routes published yet"}
+            </p>
+            <Link
+              to={createPageUrl("CreateRoute")}
+              className="inline-flex items-center gap-2 mt-4 text-amber-500 text-sm font-medium hover:text-amber-400"
+            >
+              <Plus className="w-4 h-4" />
+              Set the first route
+            </Link>
+          </div>
+        ) : (
+          <div className="mt-4 space-y-4">
+            {filtered.map((route) => (
+              <RouteCard key={route.id} route={route} />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
