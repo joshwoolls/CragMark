@@ -23,11 +23,13 @@ export default {
 
       await env.DB.prepare(
         "INSERT INTO routes (name, grade, crag) VALUES (?, ?, ?)"
-      ).bind(name, grade ?? null, crag ?? null).run();
+      )
+        .bind(name, grade ?? null, crag ?? null)
+        .run();
 
       return Response.json({ ok: true });
     }
 
-    return new Response("Not found", { status: 404 });
+    return env.ASSETS.fetch(request);
   },
 };
