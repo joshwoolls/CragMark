@@ -40,7 +40,7 @@ export default function WallCanvas({ imageUrl, holds, onAddHold, onRemoveHold, o
       ))}
       {interactive && imageLoaded && (
         <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-sm text-white/70 text-xs px-3 py-1.5 rounded-full">
-          Tap holds to mark · Tap marked hold to remove · Hover & scroll to resize
+          Tap to mark · Tap again to select & resize · Drag ring or use +/- buttons
         </div>
       )}
     </div>

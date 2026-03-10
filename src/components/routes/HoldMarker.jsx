@@ -1,5 +1,6 @@
 import React, { useState, useRef } from "react";
 import { cn } from "@/lib/utils";
+import { Plus, Minus, Trash2 } from "lucide-react";
 
 const holdColors = {
   start: "bg-emerald-500 border-emerald-300 shadow-emerald-500/50",
@@ -19,29 +20,31 @@ const SIZE_SCALE = 0.5; // Pixels per hold
 export default function HoldMarker({ hold, index, onRemove, onUpdate, interactive = false }) {
   const [isHovered, setIsHovered] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
+  const [isSelected, setIsSelected] = useState(false);
   const lastYRef = useRef(0);
   
   const size = hold.size || DEFAULT_SIZE;
   const sizeInPixels = DEFAULT_SIZE + (size - 1) * SIZE_SCALE;
 
-  const handleMouseDown = (e) => {
+  const handlePointerDown = (e) => {
     if (!interactive || !onUpdate) return;
     e.preventDefault();
     setIsResizing(true);
-    lastYRef.current = e.clientY;
+    lastYRef.current = e.clientY || e.touches?.[0]?.clientY || 0;
   };
 
-  const handleMouseMove = (e) => {
+  const handlePointerMove = (e) => {
     if (!isResizing || !onUpdate) return;
-    const delta = lastYRef.current - e.clientY;
+    const clientY = e.clientY || e.touches?.[0]?.clientY || 0;
+    const delta = lastYRef.current - clientY;
     const newSize = Math.max(1, Math.min(100, (hold.size || DEFAULT_SIZE) + delta));
     if (newSize !== (hold.size || DEFAULT_SIZE)) {
       onUpdate(index, { ...hold, size: newSize });
     }
-    lastYRef.current = e.clientY;
+    lastYRef.current = clientY;
   };
 
-  const handleMouseUp = () => {
+  const handlePointerUp = () => {
     setIsResizing(false);
   };
 
@@ -55,13 +58,23 @@ export default function HoldMarker({ hold, index, onRemove, onUpdate, interactiv
     }
   };
 
+  const adjustSize = (delta) => {
+    if (!interactive || !onUpdate) return;
+    const newSize = Math.max(1, Math.min(100, (hold.size || DEFAULT_SIZE) + delta));
+    onUpdate(index, { ...hold, size: newSize });
+  };
+
   React.useEffect(() => {
     if (isResizing) {
-      window.addEventListener("mousemove", handleMouseMove);
-      window.addEventListener("mouseup", handleMouseUp);
+      window.addEventListener("pointermove", handlePointerMove);
+      window.addEventListener("pointerup", handlePointerUp);
+      window.addEventListener("touchmove", handlePointerMove);
+      window.addEventListener("touchend", handlePointerUp);
       return () => {
-        window.removeEventListener("mousemove", handleMouseMove);
-        window.removeEventListener("mouseup", handleMouseUp);
+        window.removeEventListener("pointermove", handlePointerMove);
+        window.removeEventListener("pointerup", handlePointerUp);
+        window.removeEventListener("touchmove", handlePointerMove);
+        window.removeEventListener("touchend", handlePointerUp);
       };
     }
   }, [isResizing, hold, index, onUpdate]);
@@ -71,7 +84,10 @@ export default function HoldMarker({ hold, index, onRemove, onUpdate, interactiv
       className="absolute transform -translate-x-1/2 -translate-y-1/2 group"
       style={{ left: `${hold.x}%`, top: `${hold.y}%` }}
       onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      onMouseLeave={() => {
+        setIsHovered(false);
+        setIsSelected(false);
+      }}
       onWheel={handleWheel}
     >
       {/* Main hold marker */}
@@ -84,7 +100,11 @@ export default function HoldMarker({ hold, index, onRemove, onUpdate, interactiv
         style={{ width: `${sizeInPixels}px`, height: `${sizeInPixels}px` }}
         onClick={(e) => {
           e.stopPropagation();
-          if (interactive && onRemove) onRemove(index);
+          if (interactive) {
+            setIsSelected(!isSelected);
+          } else if (onRemove) {
+            onRemove(index);
+          }
         }}
       >
         {holdLabels[hold.type] && (
@@ -94,20 +114,72 @@ export default function HoldMarker({ hold, index, onRemove, onUpdate, interactiv
         )}
       </button>
 
-      {/* Resize handle - visible on hover when interactive */}
-      {interactive && isHovered && (
-        <div
-          className="absolute border-2 border-dashed border-white rounded-full opacity-50 hover:opacity-100 transition-opacity cursor-ns-resize pointer-events-auto"
-          style={{
-            width: `${sizeInPixels + 8}px`,
-            height: `${sizeInPixels + 8}px`,
-            left: "50%",
-            top: "50%",
-            transform: "translate(-50%, -50%)",
-          }}
-          onMouseDown={handleMouseDown}
-          title="Drag to resize · Scroll to adjust size"
-        />
+      {/* Resize handle and controls - visible on hover (desktop) or selection (mobile) */}
+      {interactive && (isHovered || isSelected) && (
+        <>
+          {/* Drag handle */}
+          <div
+            className="absolute border-2 border-dashed border-white rounded-full opacity-50 hover:opacity-100 transition-opacity cursor-ns-resize pointer-events-auto"
+            style={{
+              width: `${sizeInPixels + 8}px`,
+              height: `${sizeInPixels + 8}px`,
+              left: "50%",
+              top: "50%",
+              transform: "translate(-50%, -50%)",
+            }}
+            onPointerDown={handlePointerDown}
+            onTouchStart={handlePointerDown}
+            title="Drag to resize · Scroll to adjust · Use +/- buttons"
+          />
+
+          {/* Size adjustment buttons for mobile */}
+          {isSelected && (
+            <div className="absolute flex gap-2 pointer-events-auto -bottom-12 left-1/2 -translate-x-1/2">
+              <button
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  adjustSize(-5);
+                }}
+                onTouchStart={(e) => {
+                  e.stopPropagation();
+                  adjustSize(-5);
+                }}
+                className="w-8 h-8 bg-red-500 hover:bg-red-400 rounded-full flex items-center justify-center text-white shadow-lg"
+                title="Decrease size"
+              >
+                <Minus className="w-4 h-4" />
+              </button>
+              <button
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  adjustSize(5);
+                }}
+                onTouchStart={(e) => {
+                  e.stopPropagation();
+                  adjustSize(5);
+                }}
+                className="w-8 h-8 bg-green-500 hover:bg-green-400 rounded-full flex items-center justify-center text-white shadow-lg"
+                title="Increase size"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
+              <button
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  if (onRemove) onRemove(index);
+                }}
+                onTouchStart={(e) => {
+                  e.stopPropagation();
+                  if (onRemove) onRemove(index);
+                }}
+                className="w-8 h-8 bg-slate-600 hover:bg-slate-500 rounded-full flex items-center justify-center text-white shadow-lg"
+                title="Delete hold"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
