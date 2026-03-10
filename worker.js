@@ -1,22 +1,33 @@
 export default {
   async fetch(request, env) {
-    const url = new URL(request.url)
+    const url = new URL(request.url);
 
-    if (url.pathname === "/api/test-db") {
-      try {
-        const row = await env.DB.prepare(
-          "SELECT datetime('now') as now"
-        ).first()
+    if (url.pathname === "/api/routes" && request.method === "GET") {
+      const result = await env.DB.prepare(
+        "SELECT id, name, grade, crag, created_at FROM routes ORDER BY id DESC"
+      ).all();
 
-        return Response.json({ ok: true, row })
-      } catch (err) {
-        return Response.json(
-          { ok: false, error: String(err) },
-          { status: 500 }
-        )
-      }
+      return Response.json({ ok: true, routes: result.results });
     }
 
-    return new Response("Worker is running", { status: 200 })
+    if (url.pathname === "/api/routes" && request.method === "POST") {
+      const body = await request.json();
+      const { name, grade, crag } = body;
+
+      if (!name) {
+        return Response.json(
+          { ok: false, error: "name is required" },
+          { status: 400 }
+        );
+      }
+
+      await env.DB.prepare(
+        "INSERT INTO routes (name, grade, crag) VALUES (?, ?, ?)"
+      ).bind(name, grade ?? null, crag ?? null).run();
+
+      return Response.json({ ok: true });
+    }
+
+    return new Response("Not found", { status: 404 });
   },
-}
+};

@@ -2,6 +2,10 @@
   "name": "cragmark",
   "main": "worker.js",
   "compatibility_date": "2026-03-10",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  },
   "d1_databases": [
     {
       "binding": "DB",
