@@ -42,6 +42,14 @@ export default function CreateRoute() {
     setHolds((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const updateHold = (index, updatedHold) => {
+    setHolds((prev) => {
+      const newHolds = [...prev];
+      newHolds[index] = updatedHold;
+      return newHolds;
+    });
+  };
+
   const undoLastHold = () => {
     setHolds((prev) => prev.slice(0, -1));
   };
@@ -91,6 +99,7 @@ export default function CreateRoute() {
               holds={holds}
               onAddHold={addHold}
               onRemoveHold={removeHold}
+              onUpdateHold={updateHold}
               activeHoldType={activeHoldType}
               interactive
             />

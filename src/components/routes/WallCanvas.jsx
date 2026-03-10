@@ -1,7 +1,7 @@
 import React, { useRef, useState } from "react";
 import HoldMarker from "./HoldMarker";
 
-export default function WallCanvas({ imageUrl, holds, onAddHold, onRemoveHold, activeHoldType, interactive = false }) {
+export default function WallCanvas({ imageUrl, holds, onAddHold, onRemoveHold, onUpdateHold, activeHoldType, interactive = false }) {
   const containerRef = useRef(null);
   const [imageLoaded, setImageLoaded] = useState(false);
 
@@ -12,7 +12,7 @@ export default function WallCanvas({ imageUrl, holds, onAddHold, onRemoveHold, a
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
 
-    onAddHold({ x, y, type: activeHoldType || "middle" });
+    onAddHold({ x, y, type: activeHoldType || "middle", size: 28 });
   };
 
   return (
@@ -34,12 +34,13 @@ export default function WallCanvas({ imageUrl, holds, onAddHold, onRemoveHold, a
           hold={hold}
           index={i}
           onRemove={onRemoveHold}
+          onUpdate={onUpdateHold}
           interactive={interactive}
         />
       ))}
       {interactive && imageLoaded && (
         <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-sm text-white/70 text-xs px-3 py-1.5 rounded-full">
-          Tap holds to mark · Tap marked hold to remove
+          Tap holds to mark · Tap marked hold to remove · Hover & scroll to resize
         </div>
       )}
     </div>
