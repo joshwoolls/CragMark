@@ -17,7 +17,15 @@ export default function MyRoutes() {
 
   const { data: routes = [], isLoading } = useQuery({
     queryKey: ["my-routes", user?.email, siteId],
-    queryFn: () => base44.entities.Route.filter({ created_by: user.email, site_id: siteId }, "-created_date", 50),
+    queryFn: async () => {
+      const siteRoutes = await base44.entities.Route.filter({ created_by: user.email, site_id: siteId }, "-created_date", 50);
+      // For backwards compatibility, also include "default" site routes
+      if (siteRoutes.length === 0 && siteId !== "default") {
+        const defaultRoutes = await base44.entities.Route.filter({ created_by: user.email, site_id: "default" }, "-created_date", 50);
+        return defaultRoutes;
+      }
+      return siteRoutes;
+    },
     enabled: !!user?.email && !!siteId,
   });
 

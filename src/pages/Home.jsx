@@ -13,7 +13,15 @@ export default function Home() {
 
   const { data: routes = [], isLoading } = useQuery({
     queryKey: ["routes", siteId],
-    queryFn: () => base44.entities.Route.filter({ published: true, site_id: siteId }, "-created_date", 50),
+    queryFn: async () => {
+      const siteRoutes = await base44.entities.Route.filter({ published: true, site_id: siteId }, "-created_date", 50);
+      // For backwards compatibility, also include "default" site routes if current site is empty
+      if (siteRoutes.length === 0 && siteId !== "default") {
+        const defaultRoutes = await base44.entities.Route.filter({ published: true, site_id: "default" }, "-created_date", 50);
+        return defaultRoutes;
+      }
+      return siteRoutes;
+    },
     enabled: !!siteId,
   });
 

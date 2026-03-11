@@ -85,9 +85,8 @@ export default {
           return errorJson("Route name is required", 400);
         }
 
-        if (!body?.site_id || typeof body.site_id !== "string") {
-          return errorJson("Site ID is required", 400);
-        }
+        // Use provided site_id or default to "default"
+        const siteId = body.site_id || "default";
 
         const route = {
           id: crypto.randomUUID(),
@@ -101,28 +100,51 @@ export default {
           published: body.published ? 1 : 0,
           created_by: body.created_by || "user@localhost.local",
           created_date: now,
-          site_id: body.site_id
+          site_id: siteId
         };
 
-        await env.DB.prepare(`
-          INSERT INTO routes (
-            id, name, grade, style, description, setter_name,
-            wall_image_url, holds_json, published, created_by, created_date, site_id
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).bind(
-          route.id,
-          route.name,
-          route.grade,
-          route.style,
-          route.description,
-          route.setter_name,
-          route.wall_image_url,
-          route.holds_json,
-          route.published,
-          route.created_by,
-          route.created_date,
-          route.site_id
-        ).run();
+        try {
+          await env.DB.prepare(`
+            INSERT INTO routes (
+              id, name, grade, style, description, setter_name,
+              wall_image_url, holds_json, published, created_by, created_date, site_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `).bind(
+            route.id,
+            route.name,
+            route.grade,
+            route.style,
+            route.description,
+            route.setter_name,
+            route.wall_image_url,
+            route.holds_json,
+            route.published,
+            route.created_by,
+            route.created_date,
+            route.site_id
+          ).run();
+        } catch (dbErr) {
+          // If site_id column doesn't exist, try without it (backwards compatibility)
+          console.error("Insert with site_id failed, trying without:", dbErr.message);
+          await env.DB.prepare(`
+            INSERT INTO routes (
+              id, name, grade, style, description, setter_name,
+              wall_image_url, holds_json, published, created_by, created_date
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `).bind(
+            route.id,
+            route.name,
+            route.grade,
+            route.style,
+            route.description,
+            route.setter_name,
+            route.wall_image_url,
+            route.holds_json,
+            route.published,
+            route.created_by,
+            route.created_date
+          ).run();
+        }
 
         return json({
           ...route,
