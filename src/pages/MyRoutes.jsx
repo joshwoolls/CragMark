@@ -1,5 +1,6 @@
 import React from "react";
 import { base44 } from "@/api/base44client";
+import { useSiteId } from "@/lib/SiteIdContext";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -7,15 +8,17 @@ import { ArrowLeft, Plus, Mountain, Loader2, Globe, Lock } from "lucide-react";
 import RouteCard from "@/components/routes/RouteCard";
 
 export default function MyRoutes() {
+  const { siteId } = useSiteId();
+
   const { data: user } = useQuery({
     queryKey: ["me"],
     queryFn: () => base44.auth.me(),
   });
 
   const { data: routes = [], isLoading } = useQuery({
-    queryKey: ["my-routes", user?.email],
-    queryFn: () => base44.entities.Route.filter({ created_by: user.email }, "-created_date", 50),
-    enabled: !!user?.email,
+    queryKey: ["my-routes", user?.email, siteId],
+    queryFn: () => base44.entities.Route.filter({ created_by: user.email, site_id: siteId }, "-created_date", 50),
+    enabled: !!user?.email && !!siteId,
   });
 
   const drafts = routes.filter((r) => !r.published);

@@ -40,6 +40,7 @@ export const base44 = {
         const params = new URLSearchParams();
         if (query.id) params.set("id", query.id);
         if (query.created_by) params.set("created_by", query.created_by);
+        if (query.site_id) params.set("site_id", query.site_id);
         if (query.published !== undefined) {
           params.set("published", String(query.published));
         }

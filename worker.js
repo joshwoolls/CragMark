@@ -21,7 +21,8 @@ function mapRoute(row) {
     holds: JSON.parse(row.holds_json || "[]"),
     published: !!row.published,
     created_by: row.created_by,
-    created_date: row.created_date
+    created_date: row.created_date,
+    site_id: row.site_id
   };
 }
 
@@ -46,6 +47,7 @@ export default {
         const id = url.searchParams.get("id");
         const createdBy = url.searchParams.get("created_by");
         const published = url.searchParams.get("published");
+        const siteId = url.searchParams.get("site_id");
         const limit = Math.min(Number(url.searchParams.get("limit") || "100"), 500);
 
         let sql = "SELECT * FROM routes WHERE 1=1";
@@ -63,6 +65,10 @@ export default {
           sql += " AND published = ?";
           binds.push(published === "true" ? 1 : 0);
         }
+        if (siteId) {
+          sql += " AND site_id = ?";
+          binds.push(siteId);
+        }
 
         sql += " ORDER BY created_date DESC LIMIT ?";
         binds.push(limit);
@@ -79,6 +85,10 @@ export default {
           return errorJson("Route name is required", 400);
         }
 
+        if (!body?.site_id || typeof body.site_id !== "string") {
+          return errorJson("Site ID is required", 400);
+        }
+
         const route = {
           id: crypto.randomUUID(),
           name: body.name,
@@ -90,14 +100,15 @@ export default {
           holds_json: JSON.stringify(body.holds || []),
           published: body.published ? 1 : 0,
           created_by: body.created_by || "user@localhost.local",
-          created_date: now
+          created_date: now,
+          site_id: body.site_id
         };
 
         await env.DB.prepare(`
           INSERT INTO routes (
             id, name, grade, style, description, setter_name,
-            wall_image_url, holds_json, published, created_by, created_date
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            wall_image_url, holds_json, published, created_by, created_date, site_id
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).bind(
           route.id,
           route.name,
@@ -109,7 +120,8 @@ export default {
           route.holds_json,
           route.published,
           route.created_by,
-          route.created_date
+          route.created_date,
+          route.site_id
         ).run();
 
         return json({

@@ -1,17 +1,20 @@
 import React, { useState } from "react";
 import { base44 } from "@/api/base44client.js";
+import { useSiteId } from "@/lib/SiteIdContext";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { Plus, Search, Mountain, Loader2 } from "lucide-react";
+import { Plus, Search, Mountain, Loader2, LogOut } from "lucide-react";
 import RouteCard from "@/components/routes/RouteCard";
 
 export default function Home() {
   const [search, setSearch] = useState("");
+  const { siteId, clearSiteId } = useSiteId();
 
   const { data: routes = [], isLoading } = useQuery({
-    queryKey: ["routes"],
-    queryFn: () => base44.entities.Route.filter({ published: true }, "-created_date", 50),
+    queryKey: ["routes", siteId],
+    queryFn: () => base44.entities.Route.filter({ published: true, site_id: siteId }, "-created_date", 50),
+    enabled: !!siteId,
   });
 
   const filtered = routes.filter((r) =>
@@ -20,6 +23,10 @@ export default function Home() {
     r.setter_name?.toLowerCase().includes(search.toLowerCase())
   );
 
+  const handleChangeSite = () => {
+    clearSiteId();
+  };
+
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
       {/* Header */}
@@ -27,14 +34,26 @@ export default function Home() {
         <div className="max-w-lg mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Mountain className="w-6 h-6 text-amber-500" />
-            <span className="text-lg font-bold tracking-tight">RouteSet</span>
+            <div className="flex flex-col">
+              <span className="text-lg font-bold tracking-tight">RouteSet</span>
+              <span className="text-xs text-zinc-500">{siteId}</span>
+            </div>
           </div>
-          <Link
-            to={createPageUrl("CreateRoute")}
-            className="bg-amber-500 hover:bg-amber-400 text-white p-2.5 rounded-xl transition-colors shadow-lg shadow-amber-500/20"
-          >
-            <Plus className="w-5 h-5" />
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              to={createPageUrl("CreateRoute")}
+              className="bg-amber-500 hover:bg-amber-400 text-white p-2.5 rounded-xl transition-colors shadow-lg shadow-amber-500/20"
+            >
+              <Plus className="w-5 h-5" />
+            </Link>
+            <button
+              onClick={handleChangeSite}
+              className="text-zinc-400 hover:text-zinc-300 p-2.5 transition-colors"
+              title="Change site"
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
+          </div>
         </div>
       </div>
 

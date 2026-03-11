@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { base44 } from "@/api/base44client";
+import { useSiteId } from "@/lib/SiteIdContext";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { ArrowLeft, Undo2, Save, Send, Loader2 } from "lucide-react";
@@ -11,6 +12,7 @@ import GradeSelector from "@/components/routes/GradeSelector";
 
 export default function CreateRoute() {
   const navigate = useNavigate();
+  const { siteId } = useSiteId();
   const [step, setStep] = useState("photo"); // photo | holds | details
   const [imageUrl, setImageUrl] = useState("");
   const [isUploading, setIsUploading] = useState(false);
@@ -61,6 +63,7 @@ export default function CreateRoute() {
       wall_image_url: imageUrl,
       holds,
       published: publish,
+      site_id: siteId,
     });
     navigate(createPageUrl("ViewRoute") + `?id=${route.id}`);
   };
