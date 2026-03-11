@@ -186,28 +186,30 @@ export default function WallCanvas({ imageUrl, holds, onAddHold, onRemoveHold, o
       onTouchEnd={handleTouchEnd}
       onDoubleClick={handleDoubleClick}
     >
-      <img
-        ref={imageRef}
-        src={imageUrl}
-        alt="Climbing wall"
-        className="w-full h-auto block origin-top-left transition-transform duration-75"
-        style={{ transform: imageTransform }}
-        onLoad={() => setImageLoaded(true)}
-        draggable={false}
-      />
-      {imageLoaded && holds?.map((hold, i) => (
-        <HoldMarker
-          key={i}
-          hold={hold}
-          index={i}
-          onRemove={onRemoveHold}
-          onUpdate={onUpdateHold}
-          interactive={interactive}
+      <div style={{ transform: imageTransform, transformOrigin: "0 0" }}>
+        <img
+          ref={imageRef}
+          src={imageUrl}
+          alt="Climbing wall"
+          className="w-full h-auto block"
+          onLoad={() => setImageLoaded(true)}
+          draggable={false}
         />
-      ))}
+        {imageLoaded && holds?.map((hold, i) => (
+          <HoldMarker
+            key={i}
+            hold={hold}
+            index={i}
+            onRemove={onRemoveHold}
+            onUpdate={onUpdateHold}
+            interactive={interactive}
+          />
+        ))}
+      </div>
+
       {interactive && imageLoaded && (
         <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-sm text-white/70 text-xs px-3 py-1.5 rounded-full">
-          Scroll to zoom · Drag to pan · Double-click to reset
+          Scroll to zoom · Drag with two fingers to pan · Double-click to reset
         </div>
       )}
       {interactive && imageLoaded && scale > 1 && (
