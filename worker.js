@@ -221,6 +221,13 @@ export default {
           return new Response("R2 bucket not configured", { status: 500 });
         }
 
+        const cache = caches.default;
+        const cacheKey = new Request(request.url, request);
+        const cached = await cache.match(cacheKey);
+        if (cached) {
+          return cached;
+        }
+
         const key = decodeURIComponent(path.replace("/api/images/", ""));
         const object = await env.ROUTE_IMAGES.get(key);
 
@@ -233,10 +240,13 @@ export default {
         headers.set("etag", object.httpEtag);
         headers.set("cache-control", "public, max-age=31536000, immutable");
 
-        return new Response(object.body, {
+        const response = new Response(object.body, {
           status: 200,
           headers
         });
+
+        await cache.put(cacheKey, response.clone());
+        return response;
       }
 
       return env.ASSETS.fetch(request);
