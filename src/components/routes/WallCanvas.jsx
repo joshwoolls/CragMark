@@ -3,13 +3,18 @@ import HoldMarker from "./HoldMarker";
 
 export default function WallCanvas({ imageUrl, holds, onAddHold, onRemoveHold, onUpdateHold, activeHoldType, interactive = false }) {
   const containerRef = useRef(null);
+  const imageRef = useRef(null);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [scale, setScale] = useState(1);
   const [translateX, setTranslateX] = useState(0);
   const [translateY, setTranslateY] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
-  const [lastDragPos, setLastDragPos] = useState({ x: 0, y: 0 });
-  const imageRef = useRef(null);
+  const [isPanning, setIsPanning] = useState(false);
+  const [isPinching, setIsPinching] = useState(false);
+  const [initialPinchDistance, setInitialPinchDistance] = useState(0);
+  const [initialScale, setInitialScale] = useState(1);
+  const [initialPanCenter, setInitialPanCenter] = useState({ x: 0, y: 0 });
+  const [initialTranslate, setInitialTranslate] = useState({ x: 0, y: 0 });
+  const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
 
   // Reset zoom when image changes
   useEffect(() => {
@@ -29,21 +34,23 @@ export default function WallCanvas({ imageUrl, holds, onAddHold, onRemoveHold, o
 
   const handleMouseDown = (e) => {
     if (!interactive || e.button !== 0) return; // Only left click
-    setIsDragging(true);
-    setLastDragPos({ x: e.clientX, y: e.clientY });
+    e.preventDefault();
+    setIsPanning(true);
+    setInitialTranslate({ x: translateX, y: translateY });
+    setLastMousePos({ x: e.clientX, y: e.clientY });
   };
 
   const handleMouseMove = (e) => {
-    if (!isDragging || !interactive) return;
-    const dx = e.clientX - lastDragPos.x;
-    const dy = e.clientY - lastDragPos.y;
-    setTranslateX(translateX + dx);
-    setTranslateY(translateY + dy);
-    setLastDragPos({ x: e.clientX, y: e.clientY });
+    if (!isPanning || !interactive) return;
+    e.preventDefault();
+    const dx = e.clientX - lastMousePos.x;
+    const dy = e.clientY - lastMousePos.y;
+    setTranslateX(initialTranslate.x + dx);
+    setTranslateY(initialTranslate.y + dy);
   };
 
   const handleMouseUp = () => {
-    setIsDragging(false);
+    setIsPanning(false);
   };
 
   const handleTouchStart = (e) => {
@@ -62,17 +69,23 @@ export default function WallCanvas({ imageUrl, holds, onAddHold, onRemoveHold, o
       }
     }
     
-    if (touchCount === 1) {
-      // Single touch - let it bubble to holds for adding/resizing
-      return;
-    } else if (touchCount === 2) {
-      // Pinch zoom - prevent default to stop page scrolling
+    if (touchCount === 2) {
       e.preventDefault();
       const touch1 = e.touches[0];
       const touch2 = e.touches[1];
+      
+      // Calculate initial pinch distance
       const distance = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY);
-      setLastDragPos({ x: distance, y: scale });
-      setIsDragging(true);
+      setInitialPinchDistance(distance);
+      setInitialScale(scale);
+      
+      // Calculate initial center point for panning
+      const centerX = (touch1.clientX + touch2.clientX) / 2;
+      const centerY = (touch1.clientY + touch2.clientY) / 2;
+      setInitialPanCenter({ x: centerX, y: centerY });
+      setInitialTranslate({ x: translateX, y: translateY });
+      
+      setIsPinching(true);
     }
   };
 
@@ -91,34 +104,29 @@ export default function WallCanvas({ imageUrl, holds, onAddHold, onRemoveHold, o
       }
     }
     
-    if (touchCount === 1) {
-      // Single touch - let it bubble to holds for resizing
-      return;
-    } else if (touchCount >= 2) {
-      // Two or more fingers - pan and zoom
+    if (touchCount === 2 && isPinching) {
       e.preventDefault();
+      const touch1 = e.touches[0];
+      const touch2 = e.touches[1];
       
-      if (isDragging) {
-        // Panning with two fingers
-        const touch1 = e.touches[0];
-        const touch2 = e.touches[1];
-        const centerX = (touch1.clientX + touch2.clientX) / 2;
-        const centerY = (touch1.clientY + touch2.clientY) / 2;
-        const dx = centerX - lastDragPos.x;
-        const dy = centerY - lastDragPos.y;
-        setTranslateX(translateX + dx);
-        setTranslateY(translateY + dy);
-        setLastDragPos({ x: centerX, y: centerY });
-      } else {
-        // Pinch zoom
-        const touch1 = e.touches[0];
-        const touch2 = e.touches[1];
-        const distance = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY);
-        const scaleChange = distance / lastDragPos.x;
-        const newScale = Math.min(Math.max(0.5, scale * scaleChange), 4);
-        setScale(newScale);
-        setLastDragPos({ x: distance, y: newScale });
-      }
+      // Calculate current pinch distance
+      const currentDistance = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY);
+      
+      // Calculate scale based on initial distance
+      const scaleChange = currentDistance / initialPinchDistance;
+      const newScale = Math.min(Math.max(0.5, initialScale * scaleChange), 4);
+      setScale(newScale);
+      
+      // Calculate current center point
+      const currentCenterX = (touch1.clientX + touch2.clientX) / 2;
+      const currentCenterY = (touch1.clientY + touch2.clientY) / 2;
+      
+      // Calculate pan delta from initial center
+      const dx = currentCenterX - initialPanCenter.x;
+      const dy = currentCenterY - initialPanCenter.y;
+      
+      setTranslateX(initialTranslate.x + dx);
+      setTranslateY(initialTranslate.y + dy);
     }
   };
 
@@ -127,7 +135,7 @@ export default function WallCanvas({ imageUrl, holds, onAddHold, onRemoveHold, o
     const touchCount = e.touches.length;
     console.log("WallCanvas touchEnd - remaining touches:", touchCount);
     if (touchCount < 2) {
-      setIsDragging(false);
+      setIsPinching(false);
     }
   };
 
