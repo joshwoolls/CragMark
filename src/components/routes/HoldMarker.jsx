@@ -3,9 +3,9 @@ import { cn } from "@/lib/utils";
 import { Plus, Minus, Trash2 } from "lucide-react";
 
 const holdColors = {
-  start: "bg-emerald-500 border-emerald-300 shadow-emerald-500/50",
-  middle: "bg-sky-500 border-sky-300 shadow-sky-500/50",
-  finish: "bg-rose-500 border-rose-300 shadow-rose-500/50",
+  start: "bg-emerald-500/40 border-emerald-300 shadow-emerald-500/30",
+  middle: "bg-sky-500/40 border-sky-300 shadow-sky-500/30",
+  finish: "bg-rose-500/40 border-rose-300 shadow-rose-500/30",
 };
 
 const holdLabels = {

@@ -8,6 +8,7 @@ export const SiteIdProvider = ({ children }) => {
 
   useEffect(() => {
     const stored = localStorage.getItem("cragmark_site_id");
+    console.log("SiteIdProvider: Loaded siteId from localStorage:", stored);
     if (stored) {
       setSiteId(stored);
     }
@@ -15,11 +16,13 @@ export const SiteIdProvider = ({ children }) => {
   }, []);
 
   const setSiteIdValue = (id) => {
+    console.log("SiteIdProvider: Setting siteId to:", id);
     setSiteId(id);
     localStorage.setItem("cragmark_site_id", id);
   };
 
   const clearSiteId = () => {
+    console.log("SiteIdProvider: Clearing siteId");
     setSiteId(null);
     localStorage.removeItem("cragmark_site_id");
   };

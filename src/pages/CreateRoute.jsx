@@ -57,15 +57,23 @@ export default function CreateRoute() {
   };
 
   const handleSave = async (publish) => {
+    console.log("CreateRoute: Saving - siteId:", siteId, "publish:", publish, "form:", form);
     setIsSaving(true);
-    const route = await base44.entities.Route.create({
-      ...form,
-      wall_image_url: imageUrl,
-      holds,
-      published: publish,
-      site_id: siteId,
-    });
-    navigate(createPageUrl("ViewRoute") + `?id=${route.id}`);
+    try {
+      const route = await base44.entities.Route.create({
+        ...form,
+        wall_image_url: imageUrl,
+        holds,
+        published: publish,
+        site_id: siteId,
+      });
+      console.log("CreateRoute: Route created successfully", route);
+      navigate(createPageUrl("ViewRoute") + `?id=${route.id}`);
+    } catch (error) {
+      console.error("CreateRoute: Error saving route", error);
+      setIsSaving(false);
+      alert("Failed to save route: " + error.message);
+    }
   };
 
   return (

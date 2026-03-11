@@ -47,10 +47,13 @@ export const base44 = {
         if (limit) params.set("limit", String(limit));
         if (sortBy) params.set("sortBy", sortBy);
 
-        return api(`/api/routes?${params.toString()}`);
+        const url = `/api/routes?${params.toString()}`;
+        console.log("base44.entities.Route.filter - url:", url, "query:", query);
+        return api(url);
       },
 
       create: async (routeData) => {
+        console.log("base44.entities.Route.create - data:", routeData);
         return api("/api/routes", {
           method: "POST",
           body: JSON.stringify(routeData)

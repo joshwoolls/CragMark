@@ -50,6 +50,8 @@ export default {
         const siteId = url.searchParams.get("site_id");
         const limit = Math.min(Number(url.searchParams.get("limit") || "100"), 500);
 
+        console.log("GET /api/routes - params:", { id, createdBy, published, siteId, limit });
+
         let sql = "SELECT * FROM routes WHERE 1=1";
         const binds = [];
 
@@ -73,13 +75,19 @@ export default {
         sql += " ORDER BY created_date DESC LIMIT ?";
         binds.push(limit);
 
+        console.log("GET /api/routes - sql:", sql, "binds:", binds);
+
         const result = await env.DB.prepare(sql).bind(...binds).all();
-        return json((result.results || []).map(mapRoute));
+        const routes = (result.results || []).map(mapRoute);
+        console.log("GET /api/routes - returned", routes.length, "routes");
+        return json(routes);
       }
 
       if (path === "/api/routes" && request.method === "POST") {
         const body = await request.json();
         const now = new Date().toISOString();
+
+        console.log("POST /api/routes - body:", JSON.stringify(body, null, 2));
 
         if (!body?.name || typeof body.name !== "string") {
           return errorJson("Route name is required", 400);
@@ -102,6 +110,8 @@ export default {
           created_date: now,
           site_id: siteId
         };
+
+        console.log("Inserting route:", route);
 
         try {
           await env.DB.prepare(`
