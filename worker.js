@@ -215,6 +215,20 @@ export default {
           return errorJson("Route name is required", 400);
         }
 
+        // Get existing route to check site_id
+        const existing = await env.DB.prepare(
+          "SELECT * FROM routes WHERE id = ?"
+        ).bind(id).first();
+
+        if (!existing) {
+          return errorJson("Not found", 404);
+        }
+
+        // Verify site_id matches if provided
+        if (body.site_id && body.site_id !== existing.site_id) {
+          return errorJson("Cannot update route for different site", 403);
+        }
+
         await env.DB.prepare(`
           UPDATE routes
           SET
@@ -260,6 +274,14 @@ export default {
 
         if (!existing) {
           return errorJson("Not found", 404);
+        }
+
+        // Check if site_id is provided in query params for verification
+        const url = new URL(request.url);
+        const siteId = url.searchParams.get("site_id");
+        
+        if (siteId && existing.site_id && siteId !== existing.site_id) {
+          return errorJson("Cannot delete route for different site", 403);
         }
 
         const imageKey = getImageKeyFromUrl(existing.wall_image_url);

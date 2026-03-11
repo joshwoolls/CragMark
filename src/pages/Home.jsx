@@ -13,18 +13,7 @@ export default function Home() {
 
   const { data: routes = [], isLoading } = useQuery({
     queryKey: ["routes", siteId],
-    queryFn: async () => {
-      console.log("Home: Fetching routes for siteId:", siteId);
-      const siteRoutes = await base44.entities.Route.filter({ published: true, site_id: siteId }, "-created_date", 50);
-      console.log("Home: Got", siteRoutes.length, "routes for current site:", siteRoutes);
-      // For backwards compatibility, also include "default" site routes if current site is empty
-      if (siteRoutes.length === 0 && siteId !== "default") {
-        const defaultRoutes = await base44.entities.Route.filter({ published: true, site_id: "default" }, "-created_date", 50);
-        console.log("Home: Fallback to default, got", defaultRoutes.length, "routes:", defaultRoutes);
-        return defaultRoutes;
-      }
-      return siteRoutes;
-    },
+    queryFn: () => base44.entities.Route.filter({ published: true, site_id: siteId }, "-created_date", 50),
     enabled: !!siteId,
   });
 

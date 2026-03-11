@@ -17,18 +17,7 @@ export default function MyRoutes() {
 
   const { data: routes = [], isLoading } = useQuery({
     queryKey: ["my-routes", user?.email, siteId],
-    queryFn: async () => {
-      console.log("MyRoutes: Fetching routes for user:", user?.email, "siteId:", siteId);
-      const siteRoutes = await base44.entities.Route.filter({ created_by: user.email, site_id: siteId }, "-created_date", 50);
-      console.log("MyRoutes: Got", siteRoutes.length, "routes for current site");
-      // For backwards compatibility, also include "default" site routes
-      if (siteRoutes.length === 0 && siteId !== "default") {
-        const defaultRoutes = await base44.entities.Route.filter({ created_by: user.email, site_id: "default" }, "-created_date", 50);
-        console.log("MyRoutes: Fallback to default, got", defaultRoutes.length, "routes");
-        return defaultRoutes;
-      }
-      return siteRoutes;
-    },
+    queryFn: () => base44.entities.Route.filter({ created_by: user.email, site_id: siteId }, "-created_date", 50),
     enabled: !!user?.email && !!siteId,
   });
 

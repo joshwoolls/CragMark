@@ -5,6 +5,7 @@ export default function WallCanvas({ imageUrl, holds, onAddHold, onRemoveHold, o
   const containerRef = useRef(null);
   const imageRef = useRef(null);
   const [imageLoaded, setImageLoaded] = useState(false);
+  const [imageNaturalSize, setImageNaturalSize] = useState({ width: 0, height: 0 });
   const [scale, setScale] = useState(1);
   const [translateX, setTranslateX] = useState(0);
   const [translateY, setTranslateY] = useState(0);
@@ -22,7 +23,18 @@ export default function WallCanvas({ imageUrl, holds, onAddHold, onRemoveHold, o
     setTranslateX(0);
     setTranslateY(0);
     setImageLoaded(false);
+    setImageNaturalSize({ width: 0, height: 0 });
   }, [imageUrl]);
+
+  const handleImageLoad = () => {
+    if (imageRef.current) {
+      setImageNaturalSize({
+        width: imageRef.current.naturalWidth,
+        height: imageRef.current.naturalHeight
+      });
+    }
+    setImageLoaded(true);
+  };
 
   const handleWheel = (e) => {
     if (!interactive) return;
@@ -161,8 +173,18 @@ export default function WallCanvas({ imageUrl, holds, onAddHold, onRemoveHold, o
     const rect = containerRef.current.getBoundingClientRect();
     const clientX = e.clientX || (e.touches && e.touches[0].clientX);
     const clientY = e.clientY || (e.touches && e.touches[0].clientY);
-    const x = ((clientX - rect.left) / rect.width) * 100;
-    const y = ((clientY - rect.top) / rect.height) * 100;
+    
+    // Calculate position relative to container
+    const containerX = clientX - rect.left;
+    const containerY = clientY - rect.top;
+    
+    // Account for pan and zoom to get position in original image space
+    const imageX = (containerX - translateX) / scale;
+    const imageY = (containerY - translateY) / scale;
+    
+    // Convert to percentage based on natural image dimensions
+    const x = (imageX / imageNaturalSize.width) * 100;
+    const y = (imageY / imageNaturalSize.height) * 100;
 
     onAddHold({ x, y, type: activeHoldType || "middle", size: 28 });
   };
@@ -186,13 +208,16 @@ export default function WallCanvas({ imageUrl, holds, onAddHold, onRemoveHold, o
       onTouchEnd={handleTouchEnd}
       onDoubleClick={handleDoubleClick}
     >
-      <div style={{ transform: imageTransform, transformOrigin: "0 0" }}>
+      <div
+        className="relative"
+        style={{ transform: imageTransform, transformOrigin: "0 0" }}
+      >
         <img
           ref={imageRef}
           src={imageUrl}
           alt="Climbing wall"
           className="w-full h-auto block"
-          onLoad={() => setImageLoaded(true)}
+          onLoad={handleImageLoad}
           draggable={false}
         />
         {imageLoaded && holds?.map((hold, i) => (

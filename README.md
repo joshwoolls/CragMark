@@ -118,11 +118,6 @@ migrations/           # Database migrations
 - `POST /api/upload` - Upload image (to R2)
 - `GET /api/images/:key` - Retrieve image from R2
 
-## Environment Variables
-
-- `VITE_BASE44_APP_ID` - Base44 app identifier
-- `VITE_BASE44_APP_BASE_URL` - Backend URL (default: current origin)
-
 ## License
 
 MIT

@@ -5,6 +5,7 @@ import { MapPin, User, ArrowRight, Trash2 } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { base44 } from "@/api/base44client";
 import { toast } from "sonner";
+import { useSiteId } from "@/lib/SiteIdContext";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,12 +27,14 @@ const styleColors = {
 export default function RouteCard({ route }) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const queryClient = useQueryClient();
+  const { siteId } = useSiteId();
 
   const deleteMutation = useMutation({
-    mutationFn: () => base44.entities.Route.delete(route.id),
+    mutationFn: () => base44.entities.Route.delete(route.id, siteId),
     onSuccess: () => {
       toast.success("Route deleted successfully");
       queryClient.invalidateQueries({ queryKey: ["my-routes"] });
+      queryClient.invalidateQueries({ queryKey: ["routes"] });
       setShowDeleteDialog(false);
     },
     onError: () => {

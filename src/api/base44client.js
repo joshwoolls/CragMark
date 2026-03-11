@@ -67,8 +67,10 @@ export const base44 = {
         });
       },
 
-      delete: async (id) => {
-        return api(`/api/routes/${id}`, {
+      delete: async (id, siteId) => {
+        const params = new URLSearchParams();
+        if (siteId) params.set("site_id", siteId);
+        return api(`/api/routes/${id}?${params.toString()}`, {
           method: "DELETE"
         });
       }

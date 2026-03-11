@@ -7,6 +7,7 @@ import { ArrowLeft, Share2, User, MapPin, Mountain, Loader2, Calendar, Trash2 } 
 import { format } from "date-fns";
 import WallCanvas from "@/components/routes/WallCanvas";
 import { toast } from "sonner";
+import { useSiteId } from "@/lib/SiteIdContext";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,19 +31,21 @@ export default function ViewRoute() {
   const routeId = urlParams.get("id");
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { siteId } = useSiteId();
 
   const { data: route, isLoading } = useQuery({
-    queryKey: ["route", routeId],
-    queryFn: () => base44.entities.Route.filter({ id: routeId }),
+    queryKey: ["route", routeId, siteId],
+    queryFn: () => base44.entities.Route.filter({ id: routeId, site_id: siteId }),
     select: (data) => data?.[0],
-    enabled: !!routeId,
+    enabled: !!routeId && !!siteId,
   });
 
   const deleteMutation = useMutation({
-    mutationFn: () => base44.entities.Route.delete(routeId),
+    mutationFn: () => base44.entities.Route.delete(routeId, siteId),
     onSuccess: () => {
       toast.success("Route deleted successfully");
       queryClient.invalidateQueries({ queryKey: ["my-routes"] });
+      queryClient.invalidateQueries({ queryKey: ["routes"] });
       navigate(createPageUrl("MyRoutes"));
     },
     onError: () => {
