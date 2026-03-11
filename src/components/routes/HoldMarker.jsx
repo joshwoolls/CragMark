@@ -29,8 +29,19 @@ export default function HoldMarker({ hold, index, onRemove, onUpdate, interactiv
   const handlePointerDown = (e) => {
     if (!interactive || !onUpdate) return;
     e.preventDefault();
+    e.stopPropagation();
     setIsResizing(true);
     lastYRef.current = e.clientY || e.touches?.[0]?.clientY || 0;
+  };
+
+  const handleTouchStart = (e) => {
+    if (!interactive || !onUpdate) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.touches.length === 1) {
+      setIsResizing(true);
+      lastYRef.current = e.touches[0].clientY;
+    }
   };
 
   const handlePointerMove = (e) => {
@@ -45,6 +56,24 @@ export default function HoldMarker({ hold, index, onRemove, onUpdate, interactiv
   };
 
   const handlePointerUp = () => {
+    setIsResizing(false);
+  };
+
+  const handleTouchMove = (e) => {
+    if (!isResizing || !onUpdate) return;
+    e.preventDefault();
+    if (e.touches && e.touches.length > 0) {
+      const clientY = e.touches[0].clientY;
+      const delta = lastYRef.current - clientY;
+      const newSize = Math.max(1, Math.min(100, (hold.size || DEFAULT_SIZE) + delta));
+      if (newSize !== (hold.size || DEFAULT_SIZE)) {
+        onUpdate(index, { ...hold, size: newSize });
+      }
+      lastYRef.current = clientY;
+    }
+  };
+
+  const handleTouchEnd = (e) => {
     setIsResizing(false);
   };
 
@@ -68,13 +97,13 @@ export default function HoldMarker({ hold, index, onRemove, onUpdate, interactiv
     if (isResizing) {
       window.addEventListener("pointermove", handlePointerMove);
       window.addEventListener("pointerup", handlePointerUp);
-      window.addEventListener("touchmove", handlePointerMove);
-      window.addEventListener("touchend", handlePointerUp);
+      window.addEventListener("touchmove", handleTouchMove, { passive: false });
+      window.addEventListener("touchend", handleTouchEnd);
       return () => {
         window.removeEventListener("pointermove", handlePointerMove);
         window.removeEventListener("pointerup", handlePointerUp);
-        window.removeEventListener("touchmove", handlePointerMove);
-        window.removeEventListener("touchend", handlePointerUp);
+        window.removeEventListener("touchmove", handleTouchMove);
+        window.removeEventListener("touchend", handleTouchEnd);
       };
     }
   }, [isResizing, hold, index, onUpdate]);
@@ -93,7 +122,7 @@ export default function HoldMarker({ hold, index, onRemove, onUpdate, interactiv
       {/* Main hold marker */}
       <button
         className={cn(
-          "relative rounded-full border-2 shadow-lg flex items-center justify-center transition-all duration-150",
+          "relative rounded-full border-2 shadow-lg flex items-center justify-center transition-all duration-150 touch-none",
           holdColors[hold.type],
           interactive && "cursor-pointer hover:scale-110"
         )}
@@ -106,6 +135,8 @@ export default function HoldMarker({ hold, index, onRemove, onUpdate, interactiv
             onRemove(index);
           }
         }}
+        onPointerDown={handlePointerDown}
+        onTouchStart={handleTouchStart}
       >
         {holdLabels[hold.type] && (
           <span className="text-white text-[10px] font-bold leading-none">

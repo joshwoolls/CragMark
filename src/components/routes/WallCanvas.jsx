@@ -48,44 +48,67 @@ export default function WallCanvas({ imageUrl, holds, onAddHold, onRemoveHold, o
 
   const handleTouchStart = (e) => {
     if (!interactive) return;
-    if (e.touches.length === 1) {
-      // Single touch - start dragging
-      setIsDragging(true);
-      setLastDragPos({ x: e.touches[0].clientX, y: e.touches[0].clientY });
-    } else if (e.touches.length === 2) {
-      // Pinch zoom - calculate initial distance
+    
+    const touchCount = e.touches.length;
+    console.log("WallCanvas touchStart - count:", touchCount);
+    
+    if (touchCount === 1) {
+      // Single touch - let it bubble to holds, don't prevent default
+      return;
+    } else if (touchCount === 2) {
+      // Pinch zoom - prevent default to stop page scrolling
+      e.preventDefault();
       const touch1 = e.touches[0];
       const touch2 = e.touches[1];
       const distance = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY);
       setLastDragPos({ x: distance, y: scale });
+      setIsDragging(true);
     }
   };
 
   const handleTouchMove = (e) => {
     if (!interactive) return;
-    e.preventDefault();
     
-    if (e.touches.length === 1 && isDragging) {
-      // Dragging
-      const dx = e.touches[0].clientX - lastDragPos.x;
-      const dy = e.touches[0].clientY - lastDragPos.y;
-      setTranslateX(translateX + dx);
-      setTranslateY(translateY + dy);
-      setLastDragPos({ x: e.touches[0].clientX, y: e.touches[0].clientY });
-    } else if (e.touches.length === 2) {
-      // Pinch zoom
-      const touch1 = e.touches[0];
-      const touch2 = e.touches[1];
-      const distance = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY);
-      const scaleChange = distance / lastDragPos.x;
-      const newScale = Math.min(Math.max(0.5, scale * scaleChange), 4);
-      setScale(newScale);
-      setLastDragPos({ x: distance, y: newScale });
+    const touchCount = e.touches.length;
+    
+    if (touchCount === 1) {
+      // Single touch - let it bubble to holds for resizing
+      return;
+    } else if (touchCount >= 2) {
+      // Two or more fingers - pan and zoom
+      e.preventDefault();
+      
+      if (isDragging) {
+        // Panning with two fingers
+        const touch1 = e.touches[0];
+        const touch2 = e.touches[1];
+        const centerX = (touch1.clientX + touch2.clientX) / 2;
+        const centerY = (touch1.clientY + touch2.clientY) / 2;
+        const dx = centerX - lastDragPos.x;
+        const dy = centerY - lastDragPos.y;
+        setTranslateX(translateX + dx);
+        setTranslateY(translateY + dy);
+        setLastDragPos({ x: centerX, y: centerY });
+      } else {
+        // Pinch zoom
+        const touch1 = e.touches[0];
+        const touch2 = e.touches[1];
+        const distance = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY);
+        const scaleChange = distance / lastDragPos.x;
+        const newScale = Math.min(Math.max(0.5, scale * scaleChange), 4);
+        setScale(newScale);
+        setLastDragPos({ x: distance, y: newScale });
+      }
     }
   };
 
-  const handleTouchEnd = () => {
-    setIsDragging(false);
+  const handleTouchEnd = (e) => {
+    if (!interactive) return;
+    const touchCount = e.touches.length;
+    console.log("WallCanvas touchEnd - remaining touches:", touchCount);
+    if (touchCount < 2) {
+      setIsDragging(false);
+    }
   };
 
   const handleDoubleClick = (e) => {
@@ -98,11 +121,20 @@ export default function WallCanvas({ imageUrl, holds, onAddHold, onRemoveHold, o
   };
 
   const handleTap = (e) => {
+    // Only add hold if it's a single touch and not already interacting with a hold
     if (!interactive || !onAddHold || !imageLoaded) return;
+    if (e.touches && e.touches.length > 1) return; // Ignore multi-touch
+    
+    // Check if we're clicking on a hold marker (it will have stopped propagation)
+    if (e.target !== containerRef.current && e.target !== imageRef.current) {
+      return;
+    }
 
     const rect = containerRef.current.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 100;
-    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+    const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+    const x = ((clientX - rect.left) / rect.width) * 100;
+    const y = ((clientY - rect.top) / rect.height) * 100;
 
     onAddHold({ x, y, type: activeHoldType || "middle", size: 28 });
   };
@@ -113,7 +145,8 @@ export default function WallCanvas({ imageUrl, holds, onAddHold, onRemoveHold, o
   return (
     <div
       ref={containerRef}
-      className="relative w-full overflow-hidden rounded-2xl bg-zinc-900 select-none touch-none cursor-grab active:cursor-grabbing"
+      className="relative w-full overflow-hidden rounded-2xl bg-zinc-900 select-none touch-none"
+      style={{ touchAction: "none" }}
       onClick={handleTap}
       onWheel={handleWheel}
       onMouseDown={handleMouseDown}
