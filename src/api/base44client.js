@@ -1,10 +1,14 @@
 async function api(path, options = {}) {
+  const headers = { ...(options.headers || {}) };
+
+  // Let the browser set multipart/form-data boundaries automatically for FormData
+  if (!(options.body instanceof FormData) && !headers["Content-Type"]) {
+    headers["Content-Type"] = "application/json";
+  }
+
   const res = await fetch(path, {
     ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {})
-    }
+    headers
   });
 
   if (!res.ok) {
@@ -57,6 +61,12 @@ export const base44 = {
           method: "PUT",
           body: JSON.stringify(routeData)
         });
+      },
+
+      delete: async (id) => {
+        return api(`/api/routes/${id}`, {
+          method: "DELETE"
+        });
       }
     }
   },
@@ -64,7 +74,13 @@ export const base44 = {
   integrations: {
     Core: {
       UploadFile: async ({ file }) => {
-        return { file_url: URL.createObjectURL(file) };
+        const formData = new FormData();
+        formData.append("file", file);
+
+        return api("/api/upload", {
+          method: "POST",
+          body: formData
+        });
       }
     }
   }

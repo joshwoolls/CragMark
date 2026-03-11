@@ -15,5 +15,11 @@
       "database_id": "8fe6c671-a223-4bbd-978c-ae291f6d297b",
       "preview_database_id": "8fe6c671-a223-4bbd-978c-ae291f6d297b"
     }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "ROUTE_IMAGES",
+      "bucket_name": "cragmark-route-images"
+    }
   ]
 }
