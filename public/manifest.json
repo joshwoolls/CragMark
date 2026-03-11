@@ -1,0 +1,6 @@
+{
+  "name": "RouteSet",
+  "short_name": "RouteSet",
+  "start_url": "/",
+  "display": "standalone"
+}

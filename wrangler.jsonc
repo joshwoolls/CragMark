@@ -12,7 +12,8 @@
     {
       "binding": "DB",
       "database_name": "cragmark-db",
-      "database_id": "8fe6c671-a223-4bbd-978c-ae291f6d297b"
+      "database_id": "8fe6c671-a223-4bbd-978c-ae291f6d297b",
+      "preview_database_id": "8fe6c671-a223-4bbd-978c-ae291f6d297b"
     }
   ]
 }
