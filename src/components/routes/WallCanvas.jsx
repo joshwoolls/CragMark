@@ -55,8 +55,8 @@ export default function WallCanvas({ imageUrl, holds, onAddHold, onRemoveHold, o
   const handleMouseMove = (e) => {
     if (!isPanning || !interactive) return;
     e.preventDefault();
-    const dx = e.clientX - lastMousePos.x;
-    const dy = e.clientY - lastMousePos.y;
+    const dx = (e.clientX - lastMousePos.x) / scale;
+    const dy = (e.clientY - lastMousePos.y) / scale;
     setTranslateX(initialTranslate.x + dx);
     setTranslateY(initialTranslate.y + dy);
   };
@@ -133,9 +133,9 @@ export default function WallCanvas({ imageUrl, holds, onAddHold, onRemoveHold, o
       const currentCenterX = (touch1.clientX + touch2.clientX) / 2;
       const currentCenterY = (touch1.clientY + touch2.clientY) / 2;
       
-      // Calculate pan delta from initial center
-      const dx = currentCenterX - initialPanCenter.x;
-      const dy = currentCenterY - initialPanCenter.y;
+      // Calculate pan delta from initial center (account for scale)
+      const dx = (currentCenterX - initialPanCenter.x) / scale;
+      const dy = (currentCenterY - initialPanCenter.y) / scale;
       
       setTranslateX(initialTranslate.x + dx);
       setTranslateY(initialTranslate.y + dy);
@@ -190,7 +190,8 @@ export default function WallCanvas({ imageUrl, holds, onAddHold, onRemoveHold, o
   };
 
   // Calculate transform for image
-  const imageTransform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
+  // Scale first, then translate - this makes panning feel natural (in screen pixels)
+  const imageTransform = `scale(${scale}) translate(${translateX / scale}px, ${translateY / scale}px)`;
 
   return (
     <div
