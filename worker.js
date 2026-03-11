@@ -113,48 +113,25 @@ export default {
 
         console.log("Inserting route:", route);
 
-        try {
-          await env.DB.prepare(`
-            INSERT INTO routes (
-              id, name, grade, style, description, setter_name,
-              wall_image_url, holds_json, published, created_by, created_date, site_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `).bind(
-            route.id,
-            route.name,
-            route.grade,
-            route.style,
-            route.description,
-            route.setter_name,
-            route.wall_image_url,
-            route.holds_json,
-            route.published,
-            route.created_by,
-            route.created_date,
-            route.site_id
-          ).run();
-        } catch (dbErr) {
-          // If site_id column doesn't exist, try without it (backwards compatibility)
-          console.error("Insert with site_id failed, trying without:", dbErr.message);
-          await env.DB.prepare(`
-            INSERT INTO routes (
-              id, name, grade, style, description, setter_name,
-              wall_image_url, holds_json, published, created_by, created_date
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `).bind(
-            route.id,
-            route.name,
-            route.grade,
-            route.style,
-            route.description,
-            route.setter_name,
-            route.wall_image_url,
-            route.holds_json,
-            route.published,
-            route.created_by,
-            route.created_date
-          ).run();
-        }
+        await env.DB.prepare(`
+          INSERT INTO routes (
+            id, name, grade, style, description, setter_name,
+            wall_image_url, holds_json, published, created_by, created_date, site_id
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).bind(
+          route.id,
+          route.name,
+          route.grade,
+          route.style,
+          route.description,
+          route.setter_name,
+          route.wall_image_url,
+          route.holds_json,
+          route.published,
+          route.created_by,
+          route.created_date,
+          route.site_id
+        ).run();
 
         return json({
           ...route,

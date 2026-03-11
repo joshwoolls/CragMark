@@ -11,11 +11,13 @@ export default function Home() {
   const [search, setSearch] = useState("");
   const { siteId, clearSiteId } = useSiteId();
 
-  const { data: routes = [], isLoading } = useQuery({
+  const { data: routes = [], isLoading, error } = useQuery({
     queryKey: ["routes", siteId],
     queryFn: () => base44.entities.Route.filter({ published: true, site_id: siteId }, "-created_date", 50),
     enabled: !!siteId,
   });
+
+  console.log("Home page - siteId:", siteId, "routes:", routes, "error:", error);
 
   const filtered = routes.filter((r) =>
     !search || r.name?.toLowerCase().includes(search.toLowerCase()) ||
