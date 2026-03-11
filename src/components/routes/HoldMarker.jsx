@@ -110,6 +110,7 @@ export default function HoldMarker({ hold, index, onRemove, onUpdate, interactiv
 
   return (
     <div
+      data-hold-marker
       className="absolute transform -translate-x-1/2 -translate-y-1/2 group"
       style={{ left: `${hold.x}%`, top: `${hold.y}%` }}
       onMouseEnter={() => setIsHovered(true)}

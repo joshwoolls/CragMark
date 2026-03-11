@@ -52,8 +52,18 @@ export default function WallCanvas({ imageUrl, holds, onAddHold, onRemoveHold, o
     const touchCount = e.touches.length;
     console.log("WallCanvas touchStart - count:", touchCount);
     
+    // Check if any touch is on a hold marker
+    for (let i = 0; i < e.touches.length; i++) {
+      const touch = e.touches[i];
+      const element = document.elementFromPoint(touch.clientX, touch.clientY);
+      if (element && element.closest('[data-hold-marker]')) {
+        console.log("Touch on hold marker, ignoring for pan/zoom");
+        return;
+      }
+    }
+    
     if (touchCount === 1) {
-      // Single touch - let it bubble to holds, don't prevent default
+      // Single touch - let it bubble to holds for adding/resizing
       return;
     } else if (touchCount === 2) {
       // Pinch zoom - prevent default to stop page scrolling
@@ -70,6 +80,16 @@ export default function WallCanvas({ imageUrl, holds, onAddHold, onRemoveHold, o
     if (!interactive) return;
     
     const touchCount = e.touches.length;
+    
+    // Check if any touch is on a hold marker
+    for (let i = 0; i < e.touches.length; i++) {
+      const touch = e.touches[i];
+      const element = document.elementFromPoint(touch.clientX, touch.clientY);
+      if (element && element.closest('[data-hold-marker]')) {
+        console.log("Touch on hold marker during move, ignoring for pan/zoom");
+        return;
+      }
+    }
     
     if (touchCount === 1) {
       // Single touch - let it bubble to holds for resizing

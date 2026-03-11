@@ -23,7 +23,6 @@ A modern web application for creating, managing, and sharing climbing routes. Ro
 - **Backend**: Cloudflare Workers (worker.js)
 - **Database**: Cloudflare D1 (SQLite)
 - **Storage**: Cloudflare R2 for image uploads
-- **Authentication**: Base44 Auth (local dev mode)
 
 ## Getting Started
 
