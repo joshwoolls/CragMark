@@ -44,83 +44,43 @@ export default {
       const path = url.pathname;
 
       if (path === "/api/routes" && request.method === "GET") {
-        try {
-          const id = url.searchParams.get("id");
-          const createdBy = url.searchParams.get("created_by");
-          const published = url.searchParams.get("published");
-          const siteId = url.searchParams.get("site_id");
-          const limit = Math.min(Number(url.searchParams.get("limit") || "100"), 500);
+        const id = url.searchParams.get("id");
+        const createdBy = url.searchParams.get("created_by");
+        const published = url.searchParams.get("published");
+        const siteId = url.searchParams.get("site_id");
+        const limit = Math.min(Number(url.searchParams.get("limit") || "100"), 500);
 
-          console.log("GET /api/routes - params:", { id, createdBy, published, siteId, limit });
+        console.log("GET /api/routes - params:", { id, createdBy, published, siteId, limit });
 
-          let sql = "SELECT * FROM routes WHERE 1=1";
-          const binds = [];
+        let sql = "SELECT * FROM routes WHERE 1=1";
+        const binds = [];
 
-          if (id) {
-            sql += " AND id = ?";
-            binds.push(id);
-          }
-          if (createdBy) {
-            sql += " AND created_by = ?";
-            binds.push(createdBy);
-          }
-          if (published !== null) {
-            sql += " AND published = ?";
-            binds.push(published === "true" ? 1 : 0);
-          }
-          if (siteId) {
-            sql += " AND site_id = ?";
-            binds.push(siteId);
-          }
-
-          sql += " ORDER BY created_date DESC LIMIT ?";
-          binds.push(limit);
-
-          console.log("GET /api/routes - sql:", sql, "binds:", binds);
-
-          const result = await env.DB.prepare(sql).bind(...binds).all();
-          const routes = (result.results || []).map(mapRoute);
-          console.log("GET /api/routes - returned", routes.length, "routes");
-          return json(routes);
-        } catch (err) {
-          console.error("GET /api/routes error:", err);
-          
-          // If the error is about site_id column not existing, try without site_id filter
-          if (err.message && (err.message.includes("site_id") || err.message.includes("no such column"))) {
-            console.log("site_id column may not exist, retrying without site_id filter");
-            // Re-run query without site_id filter
-            const id = url.searchParams.get("id");
-            const createdBy = url.searchParams.get("created_by");
-            const published = url.searchParams.get("published");
-            const limit = Math.min(Number(url.searchParams.get("limit") || "100"), 500);
-
-            let sql = "SELECT * FROM routes WHERE 1=1";
-            const binds = [];
-
-            if (id) {
-              sql += " AND id = ?";
-              binds.push(id);
-            }
-            if (createdBy) {
-              sql += " AND created_by = ?";
-              binds.push(createdBy);
-            }
-            if (published !== null) {
-              sql += " AND published = ?";
-              binds.push(published === "true" ? 1 : 0);
-            }
-
-            sql += " ORDER BY created_date DESC LIMIT ?";
-            binds.push(limit);
-
-            const result = await env.DB.prepare(sql).bind(...binds).all();
-            const routes = (result.results || []).map(mapRoute);
-            console.log("GET /api/routes (fallback) - returned", routes.length, "routes");
-            return json(routes);
-          }
-          
-          return errorJson("Database query failed: " + err.message, 500);
+        if (id) {
+          sql += " AND id = ?";
+          binds.push(id);
         }
+        if (createdBy) {
+          sql += " AND created_by = ?";
+          binds.push(createdBy);
+        }
+        if (published !== null) {
+          sql += " AND published = ?";
+          binds.push(published === "true" ? 1 : 0);
+        }
+        if (siteId) {
+          sql += " AND site_id = ?";
+          binds.push(siteId);
+        }
+
+        sql += " ORDER BY created_date DESC LIMIT ?";
+        binds.push(limit);
+
+        console.log("GET /api/routes - sql:", sql, "binds:", binds);
+
+        const result = await env.DB.prepare(sql).bind(...binds).all();
+        const routes = (result.results || []).map(mapRoute);
+        console.log("GET /api/routes - returned", routes.length, "routes");
+        return json(routes);
       }
 
       if (path === "/api/routes" && request.method === "POST") {
