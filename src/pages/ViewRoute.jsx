@@ -1,12 +1,23 @@
-import React from "react";
+import React, { useState } from "react";
 import { base44 } from "@/api/base44client";
-import { useQuery } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Link, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { ArrowLeft, Share2, User, MapPin, Mountain, Loader2, Calendar } from "lucide-react";
+import { ArrowLeft, Share2, User, MapPin, Mountain, Loader2, Calendar, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import WallCanvas from "@/components/routes/WallCanvas";
 import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 const styleColors = {
   boulder: "bg-amber-500/20 text-amber-400",
@@ -17,12 +28,26 @@ const styleColors = {
 export default function ViewRoute() {
   const urlParams = new URLSearchParams(window.location.search);
   const routeId = urlParams.get("id");
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const { data: route, isLoading } = useQuery({
     queryKey: ["route", routeId],
     queryFn: () => base44.entities.Route.filter({ id: routeId }),
     select: (data) => data?.[0],
     enabled: !!routeId,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: () => base44.entities.Route.delete(routeId),
+    onSuccess: () => {
+      toast.success("Route deleted successfully");
+      queryClient.invalidateQueries({ queryKey: ["my-routes"] });
+      navigate(createPageUrl("MyRoutes"));
+    },
+    onError: () => {
+      toast.error("Failed to delete route");
+    },
   });
 
   const handleShare = async () => {
@@ -33,6 +58,10 @@ export default function ViewRoute() {
       await navigator.clipboard.writeText(url);
       toast.success("Link copied to clipboard!");
     }
+  };
+
+  const handleDelete = () => {
+    deleteMutation.mutate();
   };
 
   if (isLoading) {
@@ -73,12 +102,42 @@ export default function ViewRoute() {
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <span className="text-sm font-semibold">{route.name}</span>
-          <button
-            onClick={handleShare}
-            className="text-zinc-400 hover:text-white p-1 transition-colors"
-          >
-            <Share2 className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={handleShare}
+              className="text-zinc-400 hover:text-white p-1 transition-colors"
+            >
+              <Share2 className="w-5 h-5" />
+            </button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <button
+                  disabled={deleteMutation.isPending}
+                  className="text-zinc-400 hover:text-red-500 p-1 transition-colors disabled:opacity-50"
+                >
+                  <Trash2 className="w-5 h-5" />
+                </button>
+              </AlertDialogTrigger>
+              <AlertDialogContent className="bg-zinc-900 border-zinc-800">
+                <AlertDialogHeader>
+                  <AlertDialogTitle className="text-white">Delete Route</AlertDialogTitle>
+                  <AlertDialogDescription className="text-zinc-400">
+                    Are you sure you want to delete "{route.name}"? This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel className="bg-zinc-800 text-white hover:bg-zinc-700 border-zinc-700">Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleDelete}
+                    disabled={deleteMutation.isPending}
+                    className="bg-red-600 hover:bg-red-700 text-white disabled:opacity-50"
+                  >
+                    {deleteMutation.isPending ? "Deleting..." : "Delete"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
         </div>
       </div>
 
