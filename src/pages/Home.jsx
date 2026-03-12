@@ -2,13 +2,14 @@ import React, { useState } from "react";
 import { base44 } from "@/api/base44client.js";
 import { useSiteId } from "@/lib/SiteIdContext";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { Plus, Search, Mountain, Loader2, LogOut } from "lucide-react";
+import { Plus, Search, Mountain, Loader2, LogOut, Settings } from "lucide-react";
 import RouteCard from "@/components/routes/RouteCard";
 
 export default function Home() {
   const [search, setSearch] = useState("");
+  const navigate = useNavigate();
   const { siteId, clearSiteId } = useSiteId();
 
   const { data: routes = [], isLoading, error } = useQuery({
@@ -78,18 +79,43 @@ export default function Home() {
             <Loader2 className="w-6 h-6 animate-spin text-zinc-600" />
           </div>
         ) : filtered.length === 0 ? (
-          <div className="text-center py-20">
-            <Mountain className="w-12 h-12 text-zinc-800 mx-auto mb-3" />
-            <p className="text-zinc-500 text-sm">
-              {search ? "No routes match your search" : "No routes published yet"}
-            </p>
-            <Link
-              to={createPageUrl("CreateRoute")}
-              className="inline-flex items-center gap-2 mt-4 text-amber-500 text-sm font-medium hover:text-amber-400"
-            >
-              <Plus className="w-4 h-4" />
-              Set the first route
-            </Link>
+          <div className="text-center py-16">
+            {search ? (
+              <>
+                <Mountain className="w-12 h-12 text-zinc-800 mx-auto mb-3" />
+                <p className="text-zinc-500 text-sm">
+                  No routes match your search
+                </p>
+              </>
+            ) : (
+              <>
+                <Mountain className="w-12 h-12 text-zinc-800 mx-auto mb-4" />
+                <p className="text-zinc-300 text-sm font-medium mb-2">
+                  No routes yet for <span className="text-amber-500">{siteId}</span>
+                </p>
+                <p className="text-zinc-500 text-xs mb-6">
+                  Create your first route or switch to a different site
+                </p>
+                
+                <div className="flex flex-col gap-3">
+                  <Link
+                    to={createPageUrl("CreateRoute")}
+                    className="inline-flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 text-white font-medium py-3 px-4 rounded-xl transition-colors shadow-lg shadow-amber-500/20"
+                  >
+                    <Plus className="w-5 h-5" />
+                    Create your first route
+                  </Link>
+                  
+                  <button
+                    onClick={() => navigate("/Settings")}
+                    className="inline-flex items-center justify-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white font-medium py-3 px-4 rounded-xl transition-colors"
+                  >
+                    <Settings className="w-5 h-5" />
+                    Wrong site? Change it in Settings
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         ) : (
           <div className="mt-4 space-y-4">

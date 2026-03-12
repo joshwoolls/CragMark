@@ -1,41 +1,24 @@
-import React, { createContext, useState, useEffect } from "react";
+import React, { createContext, useContext } from "react";
+import { useAuth } from "./AuthContext";
 
 const SiteIdContext = createContext();
 
 export const SiteIdProvider = ({ children }) => {
-  const [siteId, setSiteId] = useState(null);
-  const [isLoaded, setIsLoaded] = useState(false);
+  const { user, isLoadingAuth } = useAuth();
 
-  useEffect(() => {
-    const stored = localStorage.getItem("cragmark_site_id");
-    console.log("SiteIdProvider: Loaded siteId from localStorage:", stored);
-    if (stored) {
-      setSiteId(stored);
-    }
-    setIsLoaded(true);
-  }, []);
-
-  const setSiteIdValue = (id) => {
-    console.log("SiteIdProvider: Setting siteId to:", id);
-    setSiteId(id);
-    localStorage.setItem("cragmark_site_id", id);
-  };
-
-  const clearSiteId = () => {
-    console.log("SiteIdProvider: Clearing siteId");
-    setSiteId(null);
-    localStorage.removeItem("cragmark_site_id");
-  };
+  // Site ID comes from the authenticated user's JWT (via AuthContext)
+  const siteId = user?.site_id || null;
+  const isLoaded = !isLoadingAuth;
 
   return (
-    <SiteIdContext.Provider value={{ siteId, setSiteId: setSiteIdValue, clearSiteId, isLoaded }}>
+    <SiteIdContext.Provider value={{ siteId, isLoaded }}>
       {children}
     </SiteIdContext.Provider>
   );
 };
 
 export const useSiteId = () => {
-  const context = React.useContext(SiteIdContext);
+  const context = useContext(SiteIdContext);
   if (!context) {
     throw new Error("useSiteId must be used within SiteIdProvider");
   }

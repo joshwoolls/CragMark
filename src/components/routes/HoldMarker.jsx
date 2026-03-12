@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { Plus, Minus, Trash2 } from "lucide-react";
 
@@ -14,16 +14,31 @@ const holdLabels = {
   finish: "F",
 };
 
+const holdTypeColors = {
+  start: "bg-emerald-600 hover:bg-emerald-500",
+  middle: "bg-sky-600 hover:bg-sky-500",
+  finish: "bg-rose-600 hover:bg-rose-500",
+};
+
 const DEFAULT_SIZE = 28;
 const SIZE_SCALE = 0.5;
 
-export default function HoldMarker({ hold, index, onRemove, onUpdate, interactive = false, containerWidth, containerHeight }) {
+export default function HoldMarker({ hold, index, onRemove, onUpdate, interactive = false, containerWidth, containerHeight, isSelected: externalIsSelected, onSelectionChange }) {
+  const [isSelected, setIsSelected] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-  const [isSelected, setIsSelected] = useState(false);
+  const [popupPosition, setPopupPosition] = useState("above");
+  const markerRef = useRef(null);
   const lastYRef = useRef(0);
   const initialDragPos = useRef({ x: 0, y: 0 });
+
+  // Handle external selection changes
+  useEffect(() => {
+    if (externalIsSelected !== undefined) {
+      setIsSelected(externalIsSelected);
+    }
+  }, [externalIsSelected]);
 
   const size = hold.size || DEFAULT_SIZE;
   const sizeInPixels = DEFAULT_SIZE + (size - 1) * SIZE_SCALE;
@@ -90,8 +105,25 @@ export default function HoldMarker({ hold, index, onRemove, onUpdate, interactiv
 
   const adjustSize = (delta) => {
     if (!interactive || !onUpdate) return;
-    const newSize = Math.max(1, Math.min(100, (hold.size || DEFAULT_SIZE) + delta));
+    const newSize = Math.max(10, Math.min(80, (hold.size || DEFAULT_SIZE) + delta));
     onUpdate(index, { ...hold, size: newSize });
+  };
+
+  const handleSelectHold = (e) => {
+    e.stopPropagation();
+    if (!interactive) {
+      if (onRemove) onRemove(index);
+      return;
+    }
+    setIsSelected(true);
+    if (onSelectionChange) {
+      onSelectionChange(index);
+    }
+  };
+
+  const handleTypeChange = (newType) => {
+    if (!interactive || !onUpdate) return;
+    onUpdate(index, { ...hold, type: newType });
   };
 
   React.useEffect(() => {
@@ -130,31 +162,24 @@ export default function HoldMarker({ hold, index, onRemove, onUpdate, interactiv
 
   return (
     <div
+      ref={markerRef}
       data-hold-marker
       className="absolute transform -translate-x-1/2 -translate-y-1/2 group"
       style={{ left: `${hold.x}%`, top: `${hold.y}%` }}
       onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => {
-        setIsHovered(false);
-        setIsSelected(false);
-      }}
+      onMouseLeave={() => setIsHovered(false)}
       onWheel={handleWheel}
     >
+      {/* Hold circle */}
       <button
         className={cn(
           "relative rounded-full border-2 shadow-lg flex items-center justify-center transition-all duration-150 touch-none",
           holdColors[hold.type],
-          interactive && "cursor-pointer hover:scale-110"
+          interactive && "cursor-pointer hover:scale-110",
+          isSelected && "ring-2 ring-white ring-offset-2 ring-offset-zinc-950"
         )}
         style={{ width: `${sizeInPixels}px`, height: `${sizeInPixels}px` }}
-        onClick={(e) => {
-          e.stopPropagation();
-          if (interactive) {
-            setIsSelected(!isSelected);
-          } else if (onRemove) {
-            onRemove(index);
-          }
-        }}
+        onClick={handleSelectHold}
         onPointerDown={handlePointerDown}
         onTouchStart={handleTouchStart}
       >
@@ -165,51 +190,97 @@ export default function HoldMarker({ hold, index, onRemove, onUpdate, interactiv
         )}
       </button>
 
-      {interactive && (isHovered || isSelected) && (
-        <>
-          <div
-            className="absolute border-2 border-dashed border-white rounded-full opacity-50 hover:opacity-100 transition-opacity cursor-ns-resize pointer-events-auto"
-            style={{
-              width: `${sizeInPixels + 8}px`,
-              height: `${sizeInPixels + 8}px`,
-              left: "50%",
-              top: "50%",
-              transform: "translate(-50%, -50%)",
-            }}
-            onPointerDown={handlePointerDown}
-            onTouchStart={handlePointerDown}
-            title="Drag to resize · Scroll to adjust · Use +/- buttons"
-          />
+      {/* Selection ring */}
+      {interactive && isSelected && (
+        <div
+          className="absolute border-2 border-dashed border-white rounded-full pointer-events-none"
+          style={{
+            width: `${sizeInPixels + 8}px`,
+            height: `${sizeInPixels + 8}px`,
+            left: "50%",
+            top: "50%",
+            transform: "translate(-50%, -50%)",
+          }}
+        />
+      )}
 
-          {isSelected && (
-            <div className="absolute flex gap-2 pointer-events-auto -bottom-12 left-1/2 -translate-x-1/2">
+      {/* Popup UI */}
+      {interactive && isSelected && (
+        <div
+          className="absolute left-1/2 -translate-x-1/2 bg-zinc-800 border border-zinc-700 rounded-xl shadow-xl p-4 z-50 pointer-events-auto"
+          style={{
+            bottom: "100%",
+            marginBottom: "12px",
+            minWidth: "280px",
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Resize controls */}
+          <div className="mb-4">
+            <p className="text-xs text-zinc-400 mb-2 font-medium">Size</p>
+            <div className="flex items-center gap-3">
               <button
-                onPointerDown={(e) => { e.stopPropagation(); adjustSize(-5); }}
-                onTouchStart={(e) => { e.stopPropagation(); adjustSize(-5); }}
-                className="w-8 h-8 bg-red-500 hover:bg-red-400 rounded-full flex items-center justify-center text-white shadow-lg"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  adjustSize(-5);
+                }}
+                className="w-10 h-10 bg-zinc-700 hover:bg-zinc-600 rounded-lg flex items-center justify-center text-white transition-colors"
                 title="Decrease size"
               >
-                <Minus className="w-4 h-4" />
+                <Minus className="w-5 h-5" />
               </button>
+              <div className="flex-1 text-center">
+                <span className="text-sm text-white font-medium">{hold.size || DEFAULT_SIZE}</span>
+              </div>
               <button
-                onPointerDown={(e) => { e.stopPropagation(); adjustSize(5); }}
-                onTouchStart={(e) => { e.stopPropagation(); adjustSize(5); }}
-                className="w-8 h-8 bg-green-500 hover:bg-green-400 rounded-full flex items-center justify-center text-white shadow-lg"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  adjustSize(5);
+                }}
+                className="w-10 h-10 bg-zinc-700 hover:bg-zinc-600 rounded-lg flex items-center justify-center text-white transition-colors"
                 title="Increase size"
               >
-                <Plus className="w-4 h-4" />
-              </button>
-              <button
-                onPointerDown={(e) => { e.stopPropagation(); if (onRemove) onRemove(index); }}
-                onTouchStart={(e) => { e.stopPropagation(); if (onRemove) onRemove(index); }}
-                className="w-8 h-8 bg-slate-600 hover:bg-slate-500 rounded-full flex items-center justify-center text-white shadow-lg"
-                title="Delete hold"
-              >
-                <Trash2 className="w-4 h-4" />
+                <Plus className="w-5 h-5" />
               </button>
             </div>
-          )}
-        </>
+          </div>
+
+          {/* Type selector */}
+          <div className="mb-4">
+            <p className="text-xs text-zinc-400 mb-2 font-medium">Type</p>
+            <div className="flex gap-2">
+              {["start", "middle", "finish"].map((type) => (
+                <button
+                  key={type}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleTypeChange(type);
+                  }}
+                  className={cn(
+                    "flex-1 py-2 px-3 rounded-lg font-medium text-sm transition-colors",
+                    hold.type === type
+                      ? cn(holdTypeColors[type], "text-white")
+                      : "bg-zinc-700 hover:bg-zinc-600 text-zinc-300"
+                  )}
+                >
+                  {type === "start" ? "Start" : type === "middle" ? "Middle" : "Finish"}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Delete button */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onRemove) onRemove(index);
+            }}
+            className="w-full py-2 px-3 bg-red-600 hover:bg-red-700 rounded-lg text-white font-medium text-sm transition-colors flex items-center justify-center gap-2"
+          >
+            <Trash2 className="w-4 h-4" />
+            Delete
+          </button>
+        </div>
       )}
     </div>
   );
