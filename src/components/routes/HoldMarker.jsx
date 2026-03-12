@@ -105,7 +105,7 @@ export default function HoldMarker({ hold, index, onRemove, onUpdate, interactiv
       window.addEventListener("pointerup", handlePointerUp);
       window.addEventListener("touchmove", handleTouchMove, { passive: false });
       window.addEventListener("touchend", handleTouchEnd);
-    } 
+    }
 
     return () => {
       window.removeEventListener("pointermove", handlePointerMove);
