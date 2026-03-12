@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
 import { pagesConfig } from './pages.config'
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import { SiteIdProvider, useSiteId } from '@/lib/SiteIdContext';
@@ -22,6 +22,7 @@ const LayoutWrapper = ({ children, currentPageName }) => Layout ?
 
 const AuthenticatedApp = () => {
   const { isAuthenticated, isLoadingAuth, authError, navigateToLogin } = useAuth();
+  const location = useLocation(); // Moved to top
 
   // Show loading spinner while checking auth
   if (isLoadingAuth) {
@@ -32,8 +33,10 @@ const AuthenticatedApp = () => {
     );
   }
 
-  // If not authenticated, redirect to login
-  if (!isAuthenticated) {
+  // If not authenticated and not on login/signup page, redirect to login
+  const isAuthPage = location.pathname === '/login' || location.pathname === '/signup';
+
+  if (!isAuthenticated && !isAuthPage) {
     navigateToLogin();
     return null;
   }

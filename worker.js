@@ -41,11 +41,21 @@ function isValidUuid(uuid) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uuid);
 }
 
-// Auth Helpers
-const JWT_SECRET = "your-super-secret-jwt-key"; // TODO: Get from env.JWT_SECRET
+// Base64url encoding/decoding for proper JWT format
+function base64url(str) {
+  return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function base64urlDecode(str) {
+  // Pad with = to make length a multiple of 4
+  str = str.replace(/-/g, '+').replace(/_/g, '/');
+  while (str.length % 4) str += '=';
+  return atob(str);
+}
+
 const PBKDF2_ITERATIONS = 100000;
 const PBKDF2_HASH_ALGO = "SHA-256";
-const PBKDF2_KEY_LENGTH = 32; // 32 bytes = 256 bits
+const PBKDF2_KEY_LENGTH = 32;
 
 async function hashPassword(password, salt) {
   const enc = new TextEncoder();
@@ -64,7 +74,7 @@ async function hashPassword(password, salt) {
       hash: PBKDF2_HASH_ALGO,
     },
     keyMaterial,
-    PBKDF2_KEY_LENGTH * 8 // bits
+    PBKDF2_KEY_LENGTH * 8
   );
   return Array.from(new Uint8Array(pbkdf2Buffer))
     .map((b) => b.toString(16).padStart(2, "0"))
@@ -79,6 +89,11 @@ async function verifyPassword(password, salt, hash) {
 async function generateJwt(payload, secret) {
   const header = { alg: "HS256", typ: "JWT" };
   const enc = new TextEncoder();
+
+  const headerB64 = base64url(JSON.stringify(header));
+  const payloadB64 = base64url(JSON.stringify(payload));
+  const signingInput = `${headerB64}.${payloadB64}`;
+
   const key = await crypto.subtle.importKey(
     "raw",
     enc.encode(secret),
@@ -86,24 +101,24 @@ async function generateJwt(payload, secret) {
     false,
     ["sign"]
   );
-  const token = await crypto.subtle.sign(
+
+  const signatureBuffer = await crypto.subtle.sign(
     "HMAC",
     key,
-    enc.encode(
-      `${btoa(JSON.stringify(header))}.${btoa(JSON.stringify(payload))}`
-    )
+    enc.encode(signingInput)
   );
-  return `${btoa(JSON.stringify(header))}.${btoa(
-    JSON.stringify(payload)
-  )}.${btoa(String.fromCharCode(...new Uint8Array(token)))}`;
+
+  const signatureB64 = base64url(String.fromCharCode(...new Uint8Array(signatureBuffer)));
+  return `${signingInput}.${signatureB64}`;
 }
 
 async function verifyJwt(token, secret) {
   try {
-    const [headerB64, payloadB64, signatureB64] = token.split(".");
-    const header = JSON.parse(atob(headerB64));
-    const payload = JSON.parse(atob(payloadB64));
-    const signature = atob(signatureB64);
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+
+    const [headerB64, payloadB64, signatureB64] = parts;
+    const signingInput = `${headerB64}.${payloadB64}`;
 
     const enc = new TextEncoder();
     const key = await crypto.subtle.importKey(
@@ -114,17 +129,19 @@ async function verifyJwt(token, secret) {
       ["verify"]
     );
 
+    // Decode the base64url signature back to bytes
+    const signatureBytes = Uint8Array.from(base64urlDecode(signatureB64), c => c.charCodeAt(0));
+
     const isValid = await crypto.subtle.verify(
       "HMAC",
       key,
-      enc.encode(signature),
-      enc.encode(`${headerB64}.${payloadB64}`)
+      signatureBytes,
+      enc.encode(signingInput)
     );
 
-    if (isValid) {
-      return payload;
-    }
-    return null;
+    if (!isValid) return null;
+
+    return JSON.parse(base64urlDecode(payloadB64));
   } catch (e) {
     console.error("JWT verification failed:", e);
     return null;
@@ -144,24 +161,16 @@ export default {
           return errorJson("Unauthorized", 401);
         }
         const token = authHeader.split(" ")[1];
-        const user = await verifyJwt(token, JWT_SECRET);
+        const user = await verifyJwt(token, env.JWT_SECRET);
 
         if (!user) {
           return errorJson("Unauthorized", 401);
         }
 
-        // Attach user to request context (for subsequent handlers)
         request.user = user;
 
-        // Override site_id from token
         if (request.method === "GET" || request.method === "DELETE") {
           url.searchParams.set("site_id", user.site_id);
-        } else if (request.method === "POST" || request.method === "PUT") {
-          // For POST/PUT, we need to read the body, modify it, and then recreate the request
-          // This is a bit more complex for Workers, so for now, we'll assume site_id is not in body
-          // and rely on the middleware to enforce it via the token.
-          // If site_id is sent in the body, it will be ignored/overwritten by the token's site_id
-          // in the database operations.
         }
       }
 
@@ -169,7 +178,7 @@ export default {
         const id = url.searchParams.get("id");
         const createdBy = url.searchParams.get("created_by");
         const published = url.searchParams.get("published");
-        const siteId = request.user.site_id; // Use site_id from authenticated user
+        const siteId = request.user.site_id;
         const limit = Math.min(Number(url.searchParams.get("limit") || "100"), 500);
 
         console.log("GET /api/routes - params:", { id, createdBy, published, siteId, limit });
@@ -200,7 +209,7 @@ export default {
         if (id && !isValidUuid(id)) {
           return errorJson("Invalid route ID format", 400);
         }
-        if (siteId && !/^[a-zA-Z0-9_-]{3,}$/.test(siteId)) { // Example: alphanumeric, _, - min 3 chars
+        if (siteId && !/^[a-zA-Z0-9_-]{3,}$/.test(siteId)) {
           return errorJson("Invalid site ID format", 400);
         }
 
@@ -219,7 +228,6 @@ export default {
           return errorJson("Route name is required", 400);
         }
 
-        // Use site_id from authenticated user
         const siteId = request.user.site_id;
         if (!/^[a-zA-Z0-9_-]{3,}$/.test(siteId)) {
           return errorJson("Invalid site ID format", 400);
@@ -283,7 +291,6 @@ export default {
           return errorJson("Invalid site ID format", 400);
         }
 
-        // Get existing route to check site_id
         const existing = await env.DB.prepare(
           "SELECT * FROM routes WHERE id = ?"
         ).bind(id).first();
@@ -292,7 +299,6 @@ export default {
           return errorJson("Not found", 404);
         }
 
-        // Verify site_id matches authenticated user's site_id
         if (request.user.site_id !== existing.site_id) {
           return errorJson("Cannot update route for different site", 403);
         }
@@ -344,7 +350,6 @@ export default {
           return errorJson("Not found", 404);
         }
 
-        // Check if site_id matches authenticated user's site_id
         if (request.user.site_id !== existing.site_id) {
           return errorJson("Cannot delete route for different site", 403);
         }
@@ -428,7 +433,6 @@ export default {
           return errorJson("Username, password, and site ID are required", 400);
         }
 
-        // Check if username already exists
         const existingUser = await env.DB.prepare(
           "SELECT id FROM users WHERE username = ?"
         ).bind(username).first();
@@ -437,7 +441,7 @@ export default {
           return errorJson("Username already exists", 409);
         }
 
-        const salt = crypto.randomUUID(); // Generate a random salt
+        const salt = crypto.randomUUID();
         const password_hash = `${salt}:${await hashPassword(password, salt)}`;
 
         const { success } = await env.DB.prepare(
@@ -452,7 +456,10 @@ export default {
           "SELECT id, username, site_id FROM users WHERE username = ?"
         ).bind(username).first();
 
-        const token = await generateJwt({ id: user.id, username: user.username, site_id: user.site_id }, JWT_SECRET);
+        const token = await generateJwt(
+          { sub: user.id, username: user.username, site_id: user.site_id },
+          env.JWT_SECRET
+        );
         return json({ token });
       }
 
@@ -477,7 +484,10 @@ export default {
           return errorJson("Invalid credentials", 401);
         }
 
-        const token = await generateJwt({ id: user.id, username: user.username, site_id: user.site_id }, JWT_SECRET);
+        const token = await generateJwt(
+          { sub: user.id, username: user.username, site_id: user.site_id },
+          env.JWT_SECRET
+        );
         return json({ token });
       }
 
