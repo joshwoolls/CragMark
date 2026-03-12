@@ -244,6 +244,8 @@ export default function WallCanvas({ imageUrl, holds, onAddHold, onRemoveHold, o
             onRemove={onRemoveHold}
             onUpdate={onUpdateHold}
             interactive={interactive}
+            containerWidth={containerRef.current?.offsetWidth}
+            containerHeight={containerRef.current?.offsetHeight}
           />
         ))}
       </div>

@@ -17,11 +17,13 @@ const holdLabels = {
 const DEFAULT_SIZE = 28; // Base size in pixels
 const SIZE_SCALE = 0.5; // Pixels per hold
 
-export default function HoldMarker({ hold, index, onRemove, onUpdate, interactive = false }) {
+export default function HoldMarker({ hold, index, onRemove, onUpdate, interactive = false, containerWidth, containerHeight }) {
   const [isHovered, setIsHovered] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
+  const [isDragging, setIsDragging] = useState(false); // Added for dragging
   const [isSelected, setIsSelected] = useState(false);
   const lastYRef = useRef(0);
+  const initialDragPos = useRef({ x: 0, y: 0 }); // Added for dragging
   
   const size = hold.size || DEFAULT_SIZE;
   const sizeInPixels = DEFAULT_SIZE + (size - 1) * SIZE_SCALE;
@@ -30,8 +32,12 @@ export default function HoldMarker({ hold, index, onRemove, onUpdate, interactiv
     if (!interactive || !onUpdate) return;
     e.preventDefault();
     e.stopPropagation();
-    setIsResizing(true);
-    lastYRef.current = e.clientY || e.touches?.[0]?.clientY || 0;
+
+    // Check if it's a resize handle (e.g., bottom-right corner)
+    // For now, assume any pointerdown on the marker itself is a drag
+    // We can refine this later with specific resize handles
+    setIsDragging(true);
+    initialDragPos.current = { x: e.clientX, y: e.clientY };
   };
 
   const handleTouchStart = (e) => {
@@ -39,42 +45,42 @@ export default function HoldMarker({ hold, index, onRemove, onUpdate, interactiv
     e.preventDefault();
     e.stopPropagation();
     if (e.touches.length === 1) {
-      setIsResizing(true);
-      lastYRef.current = e.touches[0].clientY;
+      setIsDragging(true);
+      initialDragPos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
     }
   };
 
-  const handlePointerMove = (e) => {
-    if (!isResizing || !onUpdate) return;
+  const handleDragMove = (e) => {
+    if (!isDragging || !onUpdate || !containerWidth || !containerHeight) return;
+    const clientX = e.clientX || e.touches?.[0]?.clientX || 0;
     const clientY = e.clientY || e.touches?.[0]?.clientY || 0;
-    const delta = lastYRef.current - clientY;
-    const newSize = Math.max(1, Math.min(100, (hold.size || DEFAULT_SIZE) + delta));
-    if (newSize !== (hold.size || DEFAULT_SIZE)) {
-      onUpdate(index, { ...hold, size: newSize });
-    }
-    lastYRef.current = clientY;
+
+    const dx = clientX - initialDragPos.current.x;
+    const dy = clientY - initialDragPos.current.y;
+
+    const percentDx = (dx / containerWidth) * 100;
+    const percentDy = (dy / containerHeight) * 100;
+
+    onUpdate(index, { ...hold, x: hold.x + percentDx, y: hold.y + percentDy });
+
+    initialDragPos.current = { x: clientX, y: clientY };
   };
 
   const handlePointerUp = () => {
     setIsResizing(false);
+    setIsDragging(false);
   };
 
   const handleTouchMove = (e) => {
-    if (!isResizing || !onUpdate) return;
+    if (!isDragging || !onUpdate) return;
     e.preventDefault();
     if (e.touches && e.touches.length > 0) {
-      const clientY = e.touches[0].clientY;
-      const delta = lastYRef.current - clientY;
-      const newSize = Math.max(1, Math.min(100, (hold.size || DEFAULT_SIZE) + delta));
-      if (newSize !== (hold.size || DEFAULT_SIZE)) {
-        onUpdate(index, { ...hold, size: newSize });
-      }
-      lastYRef.current = clientY;
+      handleDragMove(e);
     }
   };
 
   const handleTouchEnd = (e) => {
-    setIsResizing(false);
+    setIsDragging(false);
   };
 
   const handleWheel = (e) => {
@@ -94,10 +100,25 @@ export default function HoldMarker({ hold, index, onRemove, onUpdate, interactiv
   };
 
   React.useEffect(() => {
-    if (isResizing) {
+    if (isResizing || isDragging) {
       window.addEventListener("pointermove", handlePointerMove);
       window.addEventListener("pointerup", handlePointerUp);
       window.addEventListener("touchmove", handleTouchMove, { passive: false });
+      window.addEventListener("touchend", handleTouchEnd);
+    } else {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("touchmove", handleTouchMove);
+      window.removeEventListener("touchend", handleTouchEnd);
+    }
+
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("touchmove", handleTouchMove);
+      window.removeEventListener("touchend", handleTouchEnd);
+    };
+  }, [isResizing, isDragging, handlePointerMove, handlePointerUp, handleTouchMove, handleTouchEnd]);
       window.addEventListener("touchend", handleTouchEnd);
       return () => {
         window.removeEventListener("pointermove", handlePointerMove);
