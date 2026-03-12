@@ -51,6 +51,7 @@ import Home from './pages/Home';
 import CreateRoute from './pages/CreateRoute';
 import ViewRoute from './pages/ViewRoute';
 import MyRoutes from './pages/MyRoutes';
+import Settings from './pages/Settings';
 import __Layout from './Layout.jsx';
 
 
@@ -59,6 +60,7 @@ export const PAGES = {
     "CreateRoute": CreateRoute,
     "ViewRoute": ViewRoute,
     "MyRoutes": MyRoutes,
+    "Settings": Settings,
 }
 
 export const pagesConfig = {
