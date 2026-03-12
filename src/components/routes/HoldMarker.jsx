@@ -14,17 +14,17 @@ const holdLabels = {
   finish: "F",
 };
 
-const DEFAULT_SIZE = 28; // Base size in pixels
-const SIZE_SCALE = 0.5; // Pixels per hold
+const DEFAULT_SIZE = 28;
+const SIZE_SCALE = 0.5;
 
 export default function HoldMarker({ hold, index, onRemove, onUpdate, interactive = false, containerWidth, containerHeight }) {
   const [isHovered, setIsHovered] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
-  const [isDragging, setIsDragging] = useState(false); // Added for dragging
+  const [isDragging, setIsDragging] = useState(false);
   const [isSelected, setIsSelected] = useState(false);
   const lastYRef = useRef(0);
-  const initialDragPos = useRef({ x: 0, y: 0 }); // Added for dragging
-  
+  const initialDragPos = useRef({ x: 0, y: 0 });
+
   const size = hold.size || DEFAULT_SIZE;
   const sizeInPixels = DEFAULT_SIZE + (size - 1) * SIZE_SCALE;
 
@@ -32,10 +32,6 @@ export default function HoldMarker({ hold, index, onRemove, onUpdate, interactiv
     if (!interactive || !onUpdate) return;
     e.preventDefault();
     e.stopPropagation();
-
-    // Check if it's a resize handle (e.g., bottom-right corner)
-    // For now, assume any pointerdown on the marker itself is a drag
-    // We can refine this later with specific resize handles
     setIsDragging(true);
     initialDragPos.current = { x: e.clientX, y: e.clientY };
   };
@@ -62,7 +58,6 @@ export default function HoldMarker({ hold, index, onRemove, onUpdate, interactiv
     const percentDy = (dy / containerHeight) * 100;
 
     onUpdate(index, { ...hold, x: hold.x + percentDx, y: hold.y + percentDy });
-
     initialDragPos.current = { x: clientX, y: clientY };
   };
 
@@ -79,7 +74,7 @@ export default function HoldMarker({ hold, index, onRemove, onUpdate, interactiv
     }
   };
 
-  const handleTouchEnd = (e) => {
+  const handleTouchEnd = () => {
     setIsDragging(false);
   };
 
@@ -101,7 +96,6 @@ export default function HoldMarker({ hold, index, onRemove, onUpdate, interactiv
 
   React.useEffect(() => {
     const handlePointerMoveWrapper = (e) => {
-      if (isResizing) handlePointerMove(e);
       if (isDragging) handleDragMove(e);
     };
 
@@ -111,7 +105,6 @@ export default function HoldMarker({ hold, index, onRemove, onUpdate, interactiv
     };
 
     const handleTouchMoveWrapper = (e) => {
-      if (isResizing) handleTouchMove(e);
       if (isDragging) handleDragMove(e);
     };
 
@@ -133,16 +126,7 @@ export default function HoldMarker({ hold, index, onRemove, onUpdate, interactiv
       window.removeEventListener("touchmove", handleTouchMoveWrapper);
       window.removeEventListener("touchend", handleTouchEndWrapper);
     };
-  }, [isResizing, isDragging, handlePointerMove, handlePointerUp, handleTouchMove, handleTouchEnd, handleDragMove]);
-      window.addEventListener("touchend", handleTouchEnd);
-      return () => {
-        window.removeEventListener("pointermove", handlePointerMove);
-        window.removeEventListener("pointerup", handlePointerUp);
-        window.removeEventListener("touchmove", handleTouchMove);
-        window.removeEventListener("touchend", handleTouchEnd);
-      };
-    }
-  }, [isResizing, hold, index, onUpdate]);
+  }, [isResizing, isDragging, hold, index, onUpdate]);
 
   return (
     <div
@@ -156,7 +140,6 @@ export default function HoldMarker({ hold, index, onRemove, onUpdate, interactiv
       }}
       onWheel={handleWheel}
     >
-      {/* Main hold marker */}
       <button
         className={cn(
           "relative rounded-full border-2 shadow-lg flex items-center justify-center transition-all duration-150 touch-none",
@@ -182,10 +165,8 @@ export default function HoldMarker({ hold, index, onRemove, onUpdate, interactiv
         )}
       </button>
 
-      {/* Resize handle and controls - visible on hover (desktop) or selection (mobile) */}
       {interactive && (isHovered || isSelected) && (
         <>
-          {/* Drag handle */}
           <div
             className="absolute border-2 border-dashed border-white rounded-full opacity-50 hover:opacity-100 transition-opacity cursor-ns-resize pointer-events-auto"
             style={{
@@ -200,46 +181,27 @@ export default function HoldMarker({ hold, index, onRemove, onUpdate, interactiv
             title="Drag to resize · Scroll to adjust · Use +/- buttons"
           />
 
-          {/* Size adjustment buttons for mobile */}
           {isSelected && (
             <div className="absolute flex gap-2 pointer-events-auto -bottom-12 left-1/2 -translate-x-1/2">
               <button
-                onPointerDown={(e) => {
-                  e.stopPropagation();
-                  adjustSize(-5);
-                }}
-                onTouchStart={(e) => {
-                  e.stopPropagation();
-                  adjustSize(-5);
-                }}
+                onPointerDown={(e) => { e.stopPropagation(); adjustSize(-5); }}
+                onTouchStart={(e) => { e.stopPropagation(); adjustSize(-5); }}
                 className="w-8 h-8 bg-red-500 hover:bg-red-400 rounded-full flex items-center justify-center text-white shadow-lg"
                 title="Decrease size"
               >
                 <Minus className="w-4 h-4" />
               </button>
               <button
-                onPointerDown={(e) => {
-                  e.stopPropagation();
-                  adjustSize(5);
-                }}
-                onTouchStart={(e) => {
-                  e.stopPropagation();
-                  adjustSize(5);
-                }}
+                onPointerDown={(e) => { e.stopPropagation(); adjustSize(5); }}
+                onTouchStart={(e) => { e.stopPropagation(); adjustSize(5); }}
                 className="w-8 h-8 bg-green-500 hover:bg-green-400 rounded-full flex items-center justify-center text-white shadow-lg"
                 title="Increase size"
               >
                 <Plus className="w-4 h-4" />
               </button>
               <button
-                onPointerDown={(e) => {
-                  e.stopPropagation();
-                  if (onRemove) onRemove(index);
-                }}
-                onTouchStart={(e) => {
-                  e.stopPropagation();
-                  if (onRemove) onRemove(index);
-                }}
+                onPointerDown={(e) => { e.stopPropagation(); if (onRemove) onRemove(index); }}
+                onTouchStart={(e) => { e.stopPropagation(); if (onRemove) onRemove(index); }}
                 className="w-8 h-8 bg-slate-600 hover:bg-slate-500 rounded-full flex items-center justify-center text-white shadow-lg"
                 title="Delete hold"
               >
