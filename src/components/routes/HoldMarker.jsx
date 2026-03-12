@@ -100,20 +100,40 @@ export default function HoldMarker({ hold, index, onRemove, onUpdate, interactiv
   };
 
   React.useEffect(() => {
+    const handlePointerMoveWrapper = (e) => {
+      if (isResizing) handlePointerMove(e);
+      if (isDragging) handleDragMove(e);
+    };
+
+    const handlePointerUpWrapper = () => {
+      if (isResizing) setIsResizing(false);
+      if (isDragging) setIsDragging(false);
+    };
+
+    const handleTouchMoveWrapper = (e) => {
+      if (isResizing) handleTouchMove(e);
+      if (isDragging) handleDragMove(e);
+    };
+
+    const handleTouchEndWrapper = () => {
+      if (isResizing) setIsResizing(false);
+      if (isDragging) setIsDragging(false);
+    };
+
     if (isResizing || isDragging) {
-      window.addEventListener("pointermove", handlePointerMove);
-      window.addEventListener("pointerup", handlePointerUp);
-      window.addEventListener("touchmove", handleTouchMove, { passive: false });
-      window.addEventListener("touchend", handleTouchEnd);
+      window.addEventListener("pointermove", handlePointerMoveWrapper);
+      window.addEventListener("pointerup", handlePointerUpWrapper);
+      window.addEventListener("touchmove", handleTouchMoveWrapper, { passive: false });
+      window.addEventListener("touchend", handleTouchEndWrapper);
     }
 
     return () => {
-      window.removeEventListener("pointermove", handlePointerMove);
-      window.removeEventListener("pointerup", handlePointerUp);
-      window.removeEventListener("touchmove", handleTouchMove);
-      window.removeEventListener("touchend", handleTouchEnd);
+      window.removeEventListener("pointermove", handlePointerMoveWrapper);
+      window.removeEventListener("pointerup", handlePointerUpWrapper);
+      window.removeEventListener("touchmove", handleTouchMoveWrapper);
+      window.removeEventListener("touchend", handleTouchEndWrapper);
     };
-  }, [isResizing, isDragging, handlePointerMove, handlePointerUp, handleTouchMove, handleTouchEnd]);
+  }, [isResizing, isDragging, handlePointerMove, handlePointerUp, handleTouchMove, handleTouchEnd, handleDragMove]);
       window.addEventListener("touchend", handleTouchEnd);
       return () => {
         window.removeEventListener("pointermove", handlePointerMove);
