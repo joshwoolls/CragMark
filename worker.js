@@ -155,7 +155,7 @@ export default {
       const path = url.pathname;
 
       // JWT Middleware
-      if (path.startsWith("/api/") && !path.startsWith("/api/auth/")) {
+      if (path.startsWith("/api/") && !path.startsWith("/api/auth/") && !path.startsWith("/api/images/")) {
         const authHeader = request.headers.get("Authorization");
         if (!authHeader || !authHeader.startsWith("Bearer ")) {
           return errorJson("Unauthorized", 401);
