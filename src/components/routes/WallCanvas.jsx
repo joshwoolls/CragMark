@@ -35,22 +35,6 @@ export default function WallCanvas({ imageUrl, holds, onAddHold, onRemoveHold, o
     setImageNaturalSize({ width: 0, height: 0 });
   }, [imageUrl]);
 
-  // ─── NATIVE TOUCH LISTENERS (non-passive) ──────────────────────────────────
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    container.addEventListener("touchstart", handleTouchStart, { passive: false });
-    container.addEventListener("touchmove", handleTouchMove, { passive: false });
-    container.addEventListener("touchend", handleTouchEnd, { passive: false });
-
-    return () => {
-      container.removeEventListener("touchstart", handleTouchStart);
-      container.removeEventListener("touchmove", handleTouchMove);
-      container.removeEventListener("touchend", handleTouchEnd);
-    };
-  }, [handleTouchStart, handleTouchMove, handleTouchEnd]);
-
   const handleImageLoad = () => {
     if (imageRef.current) {
       setImageNaturalSize({
@@ -296,6 +280,22 @@ export default function WallCanvas({ imageUrl, holds, onAddHold, onRemoveHold, o
 
     onAddHold({ x, y, type: activeHoldType || "middle", size: 28 });
   };
+
+  // ─── NATIVE TOUCH LISTENERS (non-passive) ──────────────────────────────────
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    container.addEventListener("touchstart", handleTouchStart, { passive: false });
+    container.addEventListener("touchmove", handleTouchMove, { passive: false });
+    container.addEventListener("touchend", handleTouchEnd, { passive: false });
+
+    return () => {
+      container.removeEventListener("touchstart", handleTouchStart);
+      container.removeEventListener("touchmove", handleTouchMove);
+      container.removeEventListener("touchend", handleTouchEnd);
+    };
+  }, [handleTouchStart, handleTouchMove, handleTouchEnd]);
 
   const imageTransform = `scale(${scale}) translate(${translateX / scale}px, ${translateY / scale}px)`;
 
