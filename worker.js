@@ -310,6 +310,5 @@ export default {
       console.error("Internal server error:", err);
       return errorJson("Internal server error", 500);
     }
-    }
   }
 };
