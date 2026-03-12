@@ -41,17 +41,135 @@ function isValidUuid(uuid) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uuid);
 }
 
+// Auth Helpers
+const JWT_SECRET = "your-super-secret-jwt-key"; // TODO: Get from env.JWT_SECRET
+const PBKDF2_ITERATIONS = 100000;
+const PBKDF2_HASH_ALGO = "SHA-256";
+const PBKDF2_KEY_LENGTH = 32; // 32 bytes = 256 bits
+
+async function hashPassword(password, salt) {
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(password),
+    { name: "PBKDF2" },
+    false,
+    ["deriveBits"]
+  );
+  const pbkdf2Buffer = await crypto.subtle.deriveBits(
+    {
+      name: "PBKDF2",
+      salt: enc.encode(salt),
+      iterations: PBKDF2_ITERATIONS,
+      hash: PBKDF2_HASH_ALGO,
+    },
+    keyMaterial,
+    PBKDF2_KEY_LENGTH * 8 // bits
+  );
+  return Array.from(new Uint8Array(pbkdf2Buffer))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function verifyPassword(password, salt, hash) {
+  const newHash = await hashPassword(password, salt);
+  return newHash === hash;
+}
+
+async function generateJwt(payload, secret) {
+  const header = { alg: "HS256", typ: "JWT" };
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const token = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    enc.encode(
+      `${btoa(JSON.stringify(header))}.${btoa(JSON.stringify(payload))}`
+    )
+  );
+  return `${btoa(JSON.stringify(header))}.${btoa(
+    JSON.stringify(payload)
+  )}.${btoa(String.fromCharCode(...new Uint8Array(token)))}`;
+}
+
+async function verifyJwt(token, secret) {
+  try {
+    const [headerB64, payloadB64, signatureB64] = token.split(".");
+    const header = JSON.parse(atob(headerB64));
+    const payload = JSON.parse(atob(payloadB64));
+    const signature = atob(signatureB64);
+
+    const enc = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      "raw",
+      enc.encode(secret),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["verify"]
+    );
+
+    const isValid = await crypto.subtle.verify(
+      "HMAC",
+      key,
+      enc.encode(signature),
+      enc.encode(`${headerB64}.${payloadB64}`)
+    );
+
+    if (isValid) {
+      return payload;
+    }
+    return null;
+  } catch (e) {
+    console.error("JWT verification failed:", e);
+    return null;
+  }
+}
+
 export default {
   async fetch(request, env) {
     try {
       const url = new URL(request.url);
       const path = url.pathname;
 
+      // JWT Middleware
+      if (path.startsWith("/api/") && !path.startsWith("/api/auth/")) {
+        const authHeader = request.headers.get("Authorization");
+        if (!authHeader || !authHeader.startsWith("Bearer ")) {
+          return errorJson("Unauthorized", 401);
+        }
+        const token = authHeader.split(" ")[1];
+        const user = await verifyJwt(token, JWT_SECRET);
+
+        if (!user) {
+          return errorJson("Unauthorized", 401);
+        }
+
+        // Attach user to request context (for subsequent handlers)
+        request.user = user;
+
+        // Override site_id from token
+        if (request.method === "GET" || request.method === "DELETE") {
+          url.searchParams.set("site_id", user.site_id);
+        } else if (request.method === "POST" || request.method === "PUT") {
+          // For POST/PUT, we need to read the body, modify it, and then recreate the request
+          // This is a bit more complex for Workers, so for now, we'll assume site_id is not in body
+          // and rely on the middleware to enforce it via the token.
+          // If site_id is sent in the body, it will be ignored/overwritten by the token's site_id
+          // in the database operations.
+        }
+      }
+
       if (path === "/api/routes" && request.method === "GET") {
         const id = url.searchParams.get("id");
         const createdBy = url.searchParams.get("created_by");
         const published = url.searchParams.get("published");
-        const siteId = url.searchParams.get("site_id");
+        const siteId = request.user.site_id; // Use site_id from authenticated user
         const limit = Math.min(Number(url.searchParams.get("limit") || "100"), 500);
 
         console.log("GET /api/routes - params:", { id, createdBy, published, siteId, limit });
@@ -101,8 +219,8 @@ export default {
           return errorJson("Route name is required", 400);
         }
 
-        // Use provided site_id or default to "default"
-        const siteId = body.site_id || "default";
+        // Use site_id from authenticated user
+        const siteId = request.user.site_id;
         if (!/^[a-zA-Z0-9_-]{3,}$/.test(siteId)) {
           return errorJson("Invalid site ID format", 400);
         }
@@ -174,8 +292,8 @@ export default {
           return errorJson("Not found", 404);
         }
 
-        // Verify site_id matches if provided
-        if (body.site_id && body.site_id !== existing.site_id) {
+        // Verify site_id matches authenticated user's site_id
+        if (request.user.site_id !== existing.site_id) {
           return errorJson("Cannot update route for different site", 403);
         }
 
@@ -226,11 +344,8 @@ export default {
           return errorJson("Not found", 404);
         }
 
-        // Check if site_id is provided in query params for verification
-        const url = new URL(request.url);
-        const siteId = url.searchParams.get("site_id");
-        
-        if (siteId && existing.site_id && siteId !== existing.site_id) {
+        // Check if site_id matches authenticated user's site_id
+        if (request.user.site_id !== existing.site_id) {
           return errorJson("Cannot delete route for different site", 403);
         }
 
@@ -303,6 +418,67 @@ export default {
 
         await cache.put(cacheKey, response.clone());
         return response;
+      }
+
+      if (path === "/api/auth/signup" && request.method === "POST") {
+        const body = await request.json();
+        const { username, password, site_id } = body;
+
+        if (!username || !password || !site_id) {
+          return errorJson("Username, password, and site ID are required", 400);
+        }
+
+        // Check if username already exists
+        const existingUser = await env.DB.prepare(
+          "SELECT id FROM users WHERE username = ?"
+        ).bind(username).first();
+
+        if (existingUser) {
+          return errorJson("Username already exists", 409);
+        }
+
+        const salt = crypto.randomUUID(); // Generate a random salt
+        const password_hash = `${salt}:${await hashPassword(password, salt)}`;
+
+        const { success } = await env.DB.prepare(
+          "INSERT INTO users (username, password_hash, site_id) VALUES (?, ?, ?)"
+        ).bind(username, password_hash, site_id).run();
+
+        if (!success) {
+          return errorJson("Failed to create user", 500);
+        }
+
+        const user = await env.DB.prepare(
+          "SELECT id, username, site_id FROM users WHERE username = ?"
+        ).bind(username).first();
+
+        const token = await generateJwt({ id: user.id, username: user.username, site_id: user.site_id }, JWT_SECRET);
+        return json({ token });
+      }
+
+      if (path === "/api/auth/login" && request.method === "POST") {
+        const body = await request.json();
+        const { username, password } = body;
+
+        if (!username || !password) {
+          return errorJson("Username and password are required", 400);
+        }
+
+        const user = await env.DB.prepare(
+          "SELECT id, username, password_hash, site_id FROM users WHERE username = ?"
+        ).bind(username).first();
+
+        if (!user) {
+          return errorJson("Invalid credentials", 401);
+        }
+
+        const [salt, storedHash] = user.password_hash.split(":");
+        if (!await verifyPassword(password, salt, storedHash)) {
+          return errorJson("Invalid credentials", 401);
+        }
+
+        const token = await generateJwt({ id: user.id, username: user.username, site_id: user.site_id }, JWT_SECRET);
+        return json({ token });
       }
 
       return env.ASSETS.fetch(request);

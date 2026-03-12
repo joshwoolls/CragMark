@@ -43,25 +43,47 @@ export const AuthProvider = ({ children }) => {
       console.error('User auth check failed:', error);
       setIsLoadingAuth(false);
       setIsAuthenticated(false);
-      if (error.status === 401) {
-        setAuthError({ type: 'auth_required', message: error.message });
-      } else if (error.status === 403 && error.data?.error === 'user_not_registered') {
-        setAuthError({ type: 'user_not_registered', message: error.message });
-      } else {
-        setAuthError({ type: 'unknown', message: error.message || 'An unexpected error occurred' });
-      }
+      // No need to set authError here, base44client.js handles redirect on 401
+    }
+  };
+
+  const login = async (username, password) => {
+    try {
+      setIsLoadingAuth(true);
+      await base44.auth.login(username, password);
+      await checkUserAuth(); // Fetch user details after login
+      return true;
+    } catch (error) {
+      console.error('Login failed:', error);
+      setAuthError({ type: 'login_failed', message: error.message });
+      return false;
+    } finally {
+      setIsLoadingAuth(false);
+    }
+  };
+
+  const signup = async (username, password, site_id) => {
+    try {
+      setIsLoadingAuth(true);
+      await base44.auth.signup(username, password, site_id);
+      return true;
+    } catch (error) {
+      console.error('Signup failed:', error);
+      setAuthError({ type: 'signup_failed', message: error.message });
+      return false;
+    } finally {
+      setIsLoadingAuth(false);
     }
   };
 
   const logout = () => {
     setUser(null);
     setIsAuthenticated(false);
-    base44.auth.logout();
+    base44.auth.logout(); // This will also redirect to /login
   };
 
   const navigateToLogin = () => {
-    // No-op for local dev
-    console.log('Navigate to login (no-op in local dev)');
+    base44.auth.redirectToLogin();
   };
 
 
@@ -73,6 +95,8 @@ export const AuthProvider = ({ children }) => {
       isLoadingPublicSettings,
       authError,
       appPublicSettings,
+      login,
+      signup,
       logout,
       navigateToLogin,
       checkAppState

@@ -10,6 +10,11 @@ class ApiError extends Error {
 async function api(path, options = {}) {
   const headers = { ...(options.headers || {}) };
 
+  const token = localStorage.getItem("jwt_token");
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
   // Let the browser set multipart/form-data boundaries automatically for FormData
   if (!(options.body instanceof FormData) && !headers["Content-Type"]) {
     headers["Content-Type"] = "application/json";
@@ -28,7 +33,13 @@ async function api(path, options = {}) {
     } catch (e) {
       // Not JSON, just use text
     }
-    throw new ApiError(res.status, `API ${res.status}: ${data?.error || text}`, data);
+    const error = new ApiError(res.status, `API ${res.status}: ${data?.error || text}`, data);
+    if (res.status === 401) {
+      // Handle unauthorized globally, e.g., redirect to login
+      localStorage.removeItem("jwt_token");
+      window.location.href = "/login"; // Redirect to login page
+    }
+    throw error;
   }
 
   return res.json();
@@ -37,15 +48,38 @@ async function api(path, options = {}) {
 export const base44 = {
   auth: {
     me: async () => {
-      return {
-        id: "local-user-1",
-        email: "user@localhost.local",
-        name: "Local User"
-      };
+      // This will now hit a protected endpoint, or we can create a /api/auth/me endpoint
+      // For now, if a token exists, we assume authenticated
+      const token = localStorage.getItem("jwt_token");
+      if (token) {
+        // In a real app, you'd verify the token with the backend
+        // For this implementation, we'll just return a dummy user if token exists
+        return { id: "authenticated-user", username: "authenticated", site_id: "from-token" };
+      }
+      throw new ApiError(401, "No token found");
     },
-    logout: async () => {},
+    login: async (username, password) => {
+      const res = await api("/api/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ username, password })
+      });
+      localStorage.setItem("jwt_token", res.token);
+      return res.token;
+    },
+    signup: async (username, password, site_id) => {
+      const res = await api("/api/auth/signup", {
+        method: "POST",
+        body: JSON.stringify({ username, password, site_id })
+      });
+      localStorage.setItem("jwt_token", res.token);
+      return res.token;
+    },
+    logout: () => {
+      localStorage.removeItem("jwt_token");
+      window.location.href = "/login";
+    },
     redirectToLogin: () => {
-      console.log("Redirect to login (no-op for now)");
+      window.location.href = "/login";
     }
   },
 
