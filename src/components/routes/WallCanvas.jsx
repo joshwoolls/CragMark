@@ -179,12 +179,16 @@ export default function WallCanvas({ imageUrl, holds, onAddHold, onRemoveHold, o
     const containerY = clientY - rect.top;
     
     // Account for pan and zoom to get position in original image space
+    // The transform is: scale(s) translate(tx/s, ty/s)
+    // So we need to: (click - (tx/s)*s) / s = (click - tx) / s
     const imageX = (containerX - translateX) / scale;
     const imageY = (containerY - translateY) / scale;
     
-    // Convert to percentage based on natural image dimensions
-    const x = (imageX / imageNaturalSize.width) * 100;
-    const y = (imageY / imageNaturalSize.height) * 100;
+    // Convert to percentage based on displayed image dimensions
+    const displayedWidth = rect.width;
+    const displayedHeight = rect.height;
+    const x = (imageX / displayedWidth) * 100;
+    const y = (imageY / displayedHeight) * 100;
 
     onAddHold({ x, y, type: activeHoldType || "middle", size: 28 });
   };
