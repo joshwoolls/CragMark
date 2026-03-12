@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from "react";
+import React, { useRef, useState, useEffect, useCallback } from "react";
 import HoldMarker from "./HoldMarker";
 
 export default function WallCanvas({ imageUrl, holds, onAddHold, onRemoveHold, onUpdateHold, activeHoldType, interactive = false }) {
@@ -10,7 +10,6 @@ export default function WallCanvas({ imageUrl, holds, onAddHold, onRemoveHold, o
   const [translateX, setTranslateX] = useState(0);
   const [translateY, setTranslateY] = useState(0);
   const [isPanning, setIsPanning] = useState(false);
-  const [isPinching, setIsPinching] = useState(false);
   const [initialPinchDistance, setInitialPinchDistance] = useState(0);
   const [initialScale, setInitialScale] = useState(1);
 
@@ -20,14 +19,37 @@ export default function WallCanvas({ imageUrl, holds, onAddHold, onRemoveHold, o
   const initialPointerPos = useRef({ x: 0, y: 0 });
   const hasDragged = useRef(false);
   const isPointerDown = useRef(false);
+  const scaleRef = useRef(1);
+  const translateXRef = useRef(0);
+  const translateYRef = useRef(0);
+  const isPinchingRef = useRef(false);
 
   useEffect(() => {
+    scaleRef.current = 1;
+    translateXRef.current = 0;
+    translateYRef.current = 0;
     setScale(1);
     setTranslateX(0);
     setTranslateY(0);
     setImageLoaded(false);
     setImageNaturalSize({ width: 0, height: 0 });
   }, [imageUrl]);
+
+  // ─── NATIVE TOUCH LISTENERS (non-passive) ──────────────────────────────────
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    container.addEventListener("touchstart", handleTouchStart, { passive: false });
+    container.addEventListener("touchmove", handleTouchMove, { passive: false });
+    container.addEventListener("touchend", handleTouchEnd, { passive: false });
+
+    return () => {
+      container.removeEventListener("touchstart", handleTouchStart);
+      container.removeEventListener("touchmove", handleTouchMove);
+      container.removeEventListener("touchend", handleTouchEnd);
+    };
+  }, [handleTouchStart, handleTouchMove, handleTouchEnd]);
 
   const handleImageLoad = () => {
     if (imageRef.current) {
@@ -51,10 +73,15 @@ export default function WallCanvas({ imageUrl, holds, onAddHold, onRemoveHold, o
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
 
     setScale(prevScale => {
-      const newScale = Math.min(Math.max(0.5, prevScale * delta));
+      const newScale = Math.min(Math.max(0.5, prevScale * delta), 4);
       const scaleFactor = newScale / prevScale;
-      setTranslateX(prev => mouseX - (mouseX - prev) * scaleFactor);
-      setTranslateY(prev => mouseY - (mouseY - prev) * scaleFactor);
+      scaleRef.current = newScale;
+      const newTranslateX = mouseX - (mouseX - translateXRef.current) * scaleFactor;
+      const newTranslateY = mouseY - (mouseY - translateYRef.current) * scaleFactor;
+      translateXRef.current = newTranslateX;
+      translateYRef.current = newTranslateY;
+      setTranslateX(newTranslateX);
+      setTranslateY(newTranslateY);
       return newScale;
     });
   };
@@ -86,8 +113,12 @@ export default function WallCanvas({ imageUrl, holds, onAddHold, onRemoveHold, o
       if (dist > 5) hasDragged.current = true;
     }
 
-    setTranslateX(prev => prev + dx);
-    setTranslateY(prev => prev + dy);
+    const newTranslateX = translateXRef.current + dx;
+    const newTranslateY = translateYRef.current + dy;
+    translateXRef.current = newTranslateX;
+    translateYRef.current = newTranslateY;
+    setTranslateX(newTranslateX);
+    setTranslateY(newTranslateY);
     lastMousePos.current = { x: e.clientX, y: e.clientY };
   };
 
@@ -111,7 +142,7 @@ export default function WallCanvas({ imageUrl, holds, onAddHold, onRemoveHold, o
   };
 
   // ─── TOUCH EVENTS ──────────────────────────────────────────────────────────
-  const handleTouchStart = (e) => {
+  const handleTouchStart = useCallback((e) => {
     if (!interactive) return;
 
     const touchCount = e.touches.length;
@@ -141,13 +172,13 @@ export default function WallCanvas({ imageUrl, holds, onAddHold, onRemoveHold, o
       const distance = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY);
 
       setInitialPinchDistance(distance);
-      setInitialScale(scale);
-      initialTranslate.current = { x: translateX, y: translateY };
-      setIsPinching(true);
+      setInitialScale(scaleRef.current);
+      initialTranslate.current = { x: translateXRef.current, y: translateYRef.current };
+      isPinchingRef.current = true;
     }
-  };
+  }, [interactive]);
 
-  const handleTouchMove = (e) => {
+  const handleTouchMove = useCallback((e) => {
     if (!interactive) return;
 
     const touchCount = e.touches.length;
@@ -160,7 +191,7 @@ export default function WallCanvas({ imageUrl, holds, onAddHold, onRemoveHold, o
     }
 
     // Single finger pan
-    if (touchCount === 1 && !isPinching && isPointerDown.current) {
+    if (touchCount === 1 && !isPinchingRef.current && isPointerDown.current) {
       const touch = e.touches[0];
       const dx = touch.clientX - lastMousePos.current.x;
       const dy = touch.clientY - lastMousePos.current.y;
@@ -173,13 +204,17 @@ export default function WallCanvas({ imageUrl, holds, onAddHold, onRemoveHold, o
         if (dist > 5) hasDragged.current = true;
       }
 
-      setTranslateX(prev => prev + dx);
-      setTranslateY(prev => prev + dy);
+      const newTranslateX = translateXRef.current + dx;
+      const newTranslateY = translateYRef.current + dy;
+      translateXRef.current = newTranslateX;
+      translateYRef.current = newTranslateY;
+      setTranslateX(newTranslateX);
+      setTranslateY(newTranslateY);
       lastMousePos.current = { x: touch.clientX, y: touch.clientY };
     }
 
     // Pinch zoom (anchored to pinch midpoint)
-    if (touchCount === 2 && isPinching) {
+    if (touchCount === 2 && isPinchingRef.current) {
       e.preventDefault();
       const touch1 = e.touches[0];
       const touch2 = e.touches[1];
@@ -200,17 +235,20 @@ export default function WallCanvas({ imageUrl, holds, onAddHold, onRemoveHold, o
       const newTranslateX = pinchCenterX - (pinchCenterX - initialTranslate.current.x) * scaleFactor;
       const newTranslateY = pinchCenterY - (pinchCenterY - initialTranslate.current.y) * scaleFactor;
 
+      scaleRef.current = newScale;
+      translateXRef.current = newTranslateX;
+      translateYRef.current = newTranslateY;
       setScale(newScale);
       setTranslateX(newTranslateX);
       setTranslateY(newTranslateY);
     }
-  };
+  }, [interactive, initialPinchDistance, initialScale]);
 
-  const handleTouchEnd = (e) => {
+  const handleTouchEnd = useCallback((e) => {
     if (!interactive) return;
 
     const touchCount = e.touches.length;
-    if (touchCount < 2) setIsPinching(false);
+    if (touchCount < 2) isPinchingRef.current = false;
 
     // Single tap — place hold only if no drag
     if (e.changedTouches.length === 1 && touchCount === 0 && !hasDragged.current && isPointerDown.current) {
@@ -222,12 +260,15 @@ export default function WallCanvas({ imageUrl, holds, onAddHold, onRemoveHold, o
       isPointerDown.current = false;
       hasDragged.current = false;
     }
-  };
+  }, [interactive]);
 
   // ─── DOUBLE CLICK RESET ────────────────────────────────────────────────────
   const handleDoubleClick = (e) => {
     if (!interactive) return;
     e.preventDefault();
+    scaleRef.current = 1;
+    translateXRef.current = 0;
+    translateYRef.current = 0;
     setScale(1);
     setTranslateX(0);
     setTranslateY(0);
@@ -268,9 +309,6 @@ export default function WallCanvas({ imageUrl, holds, onAddHold, onRemoveHold, o
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseLeave}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
       onDoubleClick={handleDoubleClick}
     >
       <div

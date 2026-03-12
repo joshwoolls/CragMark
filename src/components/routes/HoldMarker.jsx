@@ -145,7 +145,7 @@ export default function HoldMarker({ hold, index, onRemove, onUpdate, interactiv
 
   const adjustSize = (delta) => {
     if (!interactive || !onUpdate) return;
-    const newSize = Math.max(10, Math.min(80, (hold.size || DEFAULT_SIZE) + delta));
+    const newSize = Math.max(5, Math.min(80, (hold.size || DEFAULT_SIZE) + delta));
     onUpdate(index, { ...hold, size: newSize });
   };
 
