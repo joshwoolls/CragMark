@@ -48,13 +48,17 @@ async function api(path, options = {}) {
 export const base44 = {
   auth: {
     me: async () => {
-      // This will now hit a protected endpoint, or we can create a /api/auth/me endpoint
-      // For now, if a token exists, we assume authenticated
       const token = localStorage.getItem("jwt_token");
       if (token) {
-        // In a real app, you'd verify the token with the backend
-        // For this implementation, we'll just return a dummy user if token exists
-        return { id: "authenticated-user", username: "authenticated", site_id: "from-token" };
+        try {
+          const [, payloadB64,] = token.split(".");
+          const payload = JSON.parse(atob(payloadB64));
+          return { id: payload.id, username: payload.username, site_id: payload.site_id };
+        } catch (e) {
+          console.error("Failed to decode JWT payload:", e);
+          localStorage.removeItem("jwt_token"); // Clear invalid token
+          throw new ApiError(401, "Invalid token");
+        }
       }
       throw new ApiError(401, "No token found");
     },
@@ -63,6 +67,7 @@ export const base44 = {
         method: "POST",
         body: JSON.stringify({ username, password })
       });
+      console.log("Login API response:", res); // Temporary log
       localStorage.setItem("jwt_token", res.token);
       return res.token;
     },

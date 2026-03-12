@@ -13,7 +13,7 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     checkAppState();
-  }, []);
+  }, []); // Empty dependency array to run only once on mount
 
   const checkAppState = async () => {
     try {
@@ -50,7 +50,7 @@ export const AuthProvider = ({ children }) => {
   const login = async (username, password) => {
     try {
       await base44.auth.login(username, password);
-      await checkUserAuth(); // Fetch user details after login
+      await checkAppState(); // Explicitly re-check auth state after login
       return true;
     } catch (error) {
       console.error('Login failed:', error);
@@ -62,6 +62,7 @@ export const AuthProvider = ({ children }) => {
   const signup = async (username, password, site_id) => {
     try {
       await base44.auth.signup(username, password, site_id);
+      await checkAppState(); // Explicitly re-check auth state after signup
       return true;
     } catch (error) {
       console.error('Signup failed:', error);
