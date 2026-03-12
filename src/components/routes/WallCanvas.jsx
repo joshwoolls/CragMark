@@ -63,8 +63,12 @@ export default function WallCanvas({ imageUrl, holds, onAddHold, onRemoveHold, o
     setTranslateY(initialTranslate.y + dy);
   };
 
-  const handleMouseUp = () => {
+  const handleMouseUp = (e) => {
     setIsPanning(false);
+    if (!hasDragged.current) {
+      handleTap(e);
+    }
+    // hasDragged.current = false; // Removed: Reset is now handled in mouse/touch up events
   };
 
   const handleTouchStart = (e) => {
@@ -151,6 +155,12 @@ export default function WallCanvas({ imageUrl, holds, onAddHold, onRemoveHold, o
     if (touchCount < 2) {
       setIsPinching(false);
     }
+
+    // If it was a single touch and no drag occurred, treat as a tap
+    if (e.changedTouches.length === 1 && !hasDragged.current) {
+      handleTap(e);
+    }
+    // hasDragged.current = false; // Reset hasDragged after potential tap
   };
 
   const handleDoubleClick = (e) => {
@@ -204,7 +214,6 @@ export default function WallCanvas({ imageUrl, holds, onAddHold, onRemoveHold, o
       ref={containerRef}
       className="relative w-full overflow-hidden rounded-2xl bg-zinc-900 select-none touch-none"
       style={{ touchAction: "none" }}
-      onClick={handleTap}
       onWheel={handleWheel}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
