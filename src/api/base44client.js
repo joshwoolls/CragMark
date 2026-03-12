@@ -67,7 +67,6 @@ export const base44 = {
         method: "POST",
         body: JSON.stringify({ username, password })
       });
-      console.log("Login API response:", res); // Temporary log
       localStorage.setItem("jwt_token", res.token);
       return res.token;
     },
@@ -75,6 +74,14 @@ export const base44 = {
       const res = await api("/api/auth/signup", {
         method: "POST",
         body: JSON.stringify({ username, password, site_id })
+      });
+      localStorage.setItem("jwt_token", res.token);
+      return res.token;
+    },
+    updateSiteId: async (site_id) => {
+      const res = await api("/api/auth/profile", {
+        method: "PUT",
+        body: JSON.stringify({ site_id })
       });
       localStorage.setItem("jwt_token", res.token);
       return res.token;

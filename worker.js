@@ -457,7 +457,7 @@ export default {
         ).bind(username).first();
 
         const token = await generateJwt(
-          { sub: user.id, username: user.username, site_id: user.site_id },
+          { id: user.id, username: user.username, site_id: user.site_id },
           env.JWT_SECRET
         );
         return json({ token });
@@ -485,10 +485,39 @@ export default {
         }
 
         const token = await generateJwt(
-          { sub: user.id, username: user.username, site_id: user.site_id },
+          { id: user.id, username: user.username, site_id: user.site_id },
           env.JWT_SECRET
         );
         return json({ token });
+      }
+
+      if (path === "/api/auth/profile" && request.method === "PUT") {
+        const body = await request.json();
+        const { site_id } = body;
+
+        if (!site_id || !/^[a-zA-Z0-9_-]{3,}$/.test(site_id)) {
+          return errorJson("Invalid site ID format", 400);
+        }
+
+        // Ensure the user is authenticated (middleware already handles 401)
+        if (!request.user || !request.user.id) {
+          return errorJson("Unauthorized", 401);
+        }
+
+        // Update the user's site_id in the database
+        const { success } = await env.DB.prepare(
+          "UPDATE users SET site_id = ? WHERE id = ?"
+        ).bind(site_id, request.user.id).run();
+
+        if (!success) {
+          return errorJson("Failed to update site ID", 500);
+        }
+
+        // Generate a new JWT token with the updated site_id
+        const updatedUser = { ...request.user, site_id };
+        const newToken = await generateJwt(updatedUser, env.JWT_SECRET);
+
+        return json({ token: newToken });
       }
 
       return env.ASSETS.fetch(request);
