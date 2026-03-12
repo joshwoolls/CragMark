@@ -49,7 +49,6 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (username, password) => {
     try {
-      setIsLoadingAuth(true);
       await base44.auth.login(username, password);
       await checkUserAuth(); // Fetch user details after login
       return true;
@@ -57,14 +56,11 @@ export const AuthProvider = ({ children }) => {
       console.error('Login failed:', error);
       setAuthError({ type: 'login_failed', message: error.message });
       return false;
-    } finally {
-      setIsLoadingAuth(false);
     }
   };
 
   const signup = async (username, password, site_id) => {
     try {
-      setIsLoadingAuth(true);
       await base44.auth.signup(username, password, site_id);
       return true;
     } catch (error) {
