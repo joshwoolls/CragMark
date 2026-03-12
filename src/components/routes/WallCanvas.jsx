@@ -13,9 +13,11 @@ export default function WallCanvas({ imageUrl, holds, onAddHold, onRemoveHold, o
   const [isPinching, setIsPinching] = useState(false);
   const [initialPinchDistance, setInitialPinchDistance] = useState(0);
   const [initialScale, setInitialScale] = useState(1);
-  const [initialPanCenter, setInitialPanCenter] = useState({ x: 0, y: 0 });
-  const [initialTranslate, setInitialTranslate] = useState({ x: 0, y: 0 });
-  const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
+
+  const initialTranslate = useRef({ x: 0, y: 0 });
+  const lastMousePos = useRef({ x: 0, y: 0 });
+  const initialPointerPos = useRef({ x: 0, y: 0 });
+  const hasDragged = useRef(false);
 
   // Reset zoom when image changes
   useEffect(() => {
@@ -239,7 +241,7 @@ export default function WallCanvas({ imageUrl, holds, onAddHold, onRemoveHold, o
 
       {interactive && imageLoaded && (
         <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-sm text-white/70 text-xs px-3 py-1.5 rounded-full">
-          Scroll to zoom · Drag with two fingers to pan · Double-click to reset
+          Scroll to zoom · Drag with one finger to pan · Pinch with two fingers to zoom · Double-click to reset
         </div>
       )}
       {interactive && imageLoaded && scale > 1 && (
