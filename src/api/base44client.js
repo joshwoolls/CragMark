@@ -53,7 +53,7 @@ export const base44 = {
         try {
           const [, payloadB64,] = token.split(".");
           const payload = JSON.parse(atob(payloadB64));
-          return { id: payload.id, username: payload.username, site_id: payload.site_id };
+          return { id: payload.sub, username: payload.username, site_id: payload.site_id };
         } catch (e) {
           console.error("Failed to decode JWT payload:", e);
           localStorage.removeItem("jwt_token"); // Clear invalid token

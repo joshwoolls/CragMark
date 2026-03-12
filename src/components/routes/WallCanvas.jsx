@@ -14,12 +14,13 @@ export default function WallCanvas({ imageUrl, holds, onAddHold, onRemoveHold, o
   const [initialPinchDistance, setInitialPinchDistance] = useState(0);
   const [initialScale, setInitialScale] = useState(1);
 
+  // All interaction tracking in refs — never state
   const initialTranslate = useRef({ x: 0, y: 0 });
   const lastMousePos = useRef({ x: 0, y: 0 });
   const initialPointerPos = useRef({ x: 0, y: 0 });
   const hasDragged = useRef(false);
+  const isPointerDown = useRef(false);
 
-  // Reset zoom when image changes
   useEffect(() => {
     setScale(1);
     setTranslateX(0);
@@ -38,175 +39,223 @@ export default function WallCanvas({ imageUrl, holds, onAddHold, onRemoveHold, o
     setImageLoaded(true);
   };
 
+  // ─── WHEEL ZOOM (anchored to cursor) ───────────────────────────────────────
   const handleWheel = (e) => {
     if (!interactive) return;
     e.preventDefault();
+
+    const containerRect = containerRef.current.getBoundingClientRect();
+    const mouseX = e.clientX - containerRect.left;
+    const mouseY = e.clientY - containerRect.top;
+
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    const newScale = Math.min(Math.max(0.5, scale * delta), 4);
-    setScale(newScale);
+
+    setScale(prevScale => {
+      const newScale = Math.min(Math.max(0.5, prevScale * delta));
+      const scaleFactor = newScale / prevScale;
+      setTranslateX(prev => mouseX - (mouseX - prev) * scaleFactor);
+      setTranslateY(prev => mouseY - (mouseY - prev) * scaleFactor);
+      return newScale;
+    });
   };
 
+  // ─── MOUSE EVENTS ──────────────────────────────────────────────────────────
   const handleMouseDown = (e) => {
-    if (!interactive || e.button !== 0) return; // Only left click
+    if (!interactive || e.button !== 0) return;
     e.preventDefault();
+    isPointerDown.current = true;
+    hasDragged.current = false;
+    lastMousePos.current = { x: e.clientX, y: e.clientY };
+    initialPointerPos.current = { x: e.clientX, y: e.clientY };
     setIsPanning(true);
-    setInitialTranslate({ x: translateX, y: translateY });
-    setLastMousePos({ x: e.clientX, y: e.clientY });
   };
 
   const handleMouseMove = (e) => {
-    if (!isPanning || !interactive) return;
+    if (!isPointerDown.current || !interactive) return;
     e.preventDefault();
-    const dx = (e.clientX - lastMousePos.x) / scale;
-    const dy = (e.clientY - lastMousePos.y) / scale;
-    setTranslateX(initialTranslate.x + dx);
-    setTranslateY(initialTranslate.y + dy);
+
+    const dx = e.clientX - lastMousePos.current.x;
+    const dy = e.clientY - lastMousePos.current.y;
+
+    // Mark as dragged if moved more than 5px from origin
+    if (!hasDragged.current) {
+      const dist = Math.hypot(
+        e.clientX - initialPointerPos.current.x,
+        e.clientY - initialPointerPos.current.y
+      );
+      if (dist > 5) hasDragged.current = true;
+    }
+
+    setTranslateX(prev => prev + dx);
+    setTranslateY(prev => prev + dy);
+    lastMousePos.current = { x: e.clientX, y: e.clientY };
   };
 
   const handleMouseUp = (e) => {
+    if (!isPointerDown.current) return;
+    isPointerDown.current = false;
     setIsPanning(false);
+
+    // Only place hold if no drag occurred
     if (!hasDragged.current) {
-      handleTap(e);
+      placeHold(e.clientX, e.clientY, e.target);
     }
-    // hasDragged.current = false; // Removed: Reset is now handled in mouse/touch up events
+    hasDragged.current = false;
   };
 
+  const handleMouseLeave = () => {
+    // Cancel pan on leave but don't place hold
+    isPointerDown.current = false;
+    hasDragged.current = false;
+    setIsPanning(false);
+  };
+
+  // ─── TOUCH EVENTS ──────────────────────────────────────────────────────────
   const handleTouchStart = (e) => {
     if (!interactive) return;
-    
+
     const touchCount = e.touches.length;
-    console.log("WallCanvas touchStart - count:", touchCount);
-    
+
     // Check if any touch is on a hold marker
     for (let i = 0; i < e.touches.length; i++) {
       const touch = e.touches[i];
       const element = document.elementFromPoint(touch.clientX, touch.clientY);
-      if (element && element.closest('[data-hold-marker]')) {
-        console.log("Touch on hold marker, ignoring for pan/zoom");
-        return;
-      }
+      if (element && element.closest('[data-hold-marker]')) return;
     }
-    
+
+    if (touchCount === 1) {
+      hasDragged.current = false;
+      isPointerDown.current = true;
+      lastMousePos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      initialPointerPos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    }
+
     if (touchCount === 2) {
       e.preventDefault();
+      // Second finger down — cancel any single-touch tap
+      hasDragged.current = true;
+      isPointerDown.current = false;
+
       const touch1 = e.touches[0];
       const touch2 = e.touches[1];
-      
-      // Calculate initial pinch distance
       const distance = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY);
+
       setInitialPinchDistance(distance);
       setInitialScale(scale);
-      
-      // Calculate initial center point for panning
-      const centerX = (touch1.clientX + touch2.clientX) / 2;
-      const centerY = (touch1.clientY + touch2.clientY) / 2;
-      setInitialPanCenter({ x: centerX, y: centerY });
-      setInitialTranslate({ x: translateX, y: translateY });
-      
+      initialTranslate.current = { x: translateX, y: translateY };
       setIsPinching(true);
     }
   };
 
   const handleTouchMove = (e) => {
     if (!interactive) return;
-    
+
     const touchCount = e.touches.length;
-    
+
     // Check if any touch is on a hold marker
     for (let i = 0; i < e.touches.length; i++) {
       const touch = e.touches[i];
       const element = document.elementFromPoint(touch.clientX, touch.clientY);
-      if (element && element.closest('[data-hold-marker]')) {
-        console.log("Touch on hold marker during move, ignoring for pan/zoom");
-        return;
-      }
+      if (element && element.closest('[data-hold-marker]')) return;
     }
-    
+
+    // Single finger pan
+    if (touchCount === 1 && !isPinching && isPointerDown.current) {
+      const touch = e.touches[0];
+      const dx = touch.clientX - lastMousePos.current.x;
+      const dy = touch.clientY - lastMousePos.current.y;
+
+      if (!hasDragged.current) {
+        const dist = Math.hypot(
+          touch.clientX - initialPointerPos.current.x,
+          touch.clientY - initialPointerPos.current.y
+        );
+        if (dist > 5) hasDragged.current = true;
+      }
+
+      setTranslateX(prev => prev + dx);
+      setTranslateY(prev => prev + dy);
+      lastMousePos.current = { x: touch.clientX, y: touch.clientY };
+    }
+
+    // Pinch zoom (anchored to pinch midpoint)
     if (touchCount === 2 && isPinching) {
       e.preventDefault();
       const touch1 = e.touches[0];
       const touch2 = e.touches[1];
-      
-      // Calculate current pinch distance
-      const currentDistance = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY);
-      
-      // Calculate scale based on initial distance
+
+      const currentDistance = Math.hypot(
+        touch2.clientX - touch1.clientX,
+        touch2.clientY - touch1.clientY
+      );
+
       const scaleChange = currentDistance / initialPinchDistance;
       const newScale = Math.min(Math.max(0.5, initialScale * scaleChange), 4);
+
+      const containerRect = containerRef.current.getBoundingClientRect();
+      const pinchCenterX = (touch1.clientX + touch2.clientX) / 2 - containerRect.left;
+      const pinchCenterY = (touch1.clientY + touch2.clientY) / 2 - containerRect.top;
+
+      const scaleFactor = newScale / initialScale;
+      const newTranslateX = pinchCenterX - (pinchCenterX - initialTranslate.current.x) * scaleFactor;
+      const newTranslateY = pinchCenterY - (pinchCenterY - initialTranslate.current.y) * scaleFactor;
+
       setScale(newScale);
-      
-      // Calculate current center point
-      const currentCenterX = (touch1.clientX + touch2.clientX) / 2;
-      const currentCenterY = (touch1.clientY + touch2.clientY) / 2;
-      
-      // Calculate pan delta from initial center (account for scale)
-      const dx = (currentCenterX - initialPanCenter.x) / scale;
-      const dy = (currentCenterY - initialPanCenter.y) / scale;
-      
-      setTranslateX(initialTranslate.x + dx);
-      setTranslateY(initialTranslate.y + dy);
+      setTranslateX(newTranslateX);
+      setTranslateY(newTranslateY);
     }
   };
 
   const handleTouchEnd = (e) => {
     if (!interactive) return;
+
     const touchCount = e.touches.length;
-    console.log("WallCanvas touchEnd - remaining touches:", touchCount);
-    if (touchCount < 2) {
-      setIsPinching(false);
+    if (touchCount < 2) setIsPinching(false);
+
+    // Single tap — place hold only if no drag
+    if (e.changedTouches.length === 1 && touchCount === 0 && !hasDragged.current && isPointerDown.current) {
+      const touch = e.changedTouches[0];
+      placeHold(touch.clientX, touch.clientY, document.elementFromPoint(touch.clientX, touch.clientY));
     }
 
-    // If it was a single touch and no drag occurred, treat as a tap
-    if (e.changedTouches.length === 1 && !hasDragged.current) {
-      handleTap(e);
+    if (touchCount === 0) {
+      isPointerDown.current = false;
+      hasDragged.current = false;
     }
-    // hasDragged.current = false; // Reset hasDragged after potential tap
   };
 
+  // ─── DOUBLE CLICK RESET ────────────────────────────────────────────────────
   const handleDoubleClick = (e) => {
     if (!interactive) return;
     e.preventDefault();
-    // Reset zoom on double click
     setScale(1);
     setTranslateX(0);
     setTranslateY(0);
   };
 
-  const handleTap = (e) => {
-    // Only add hold if it's a single touch and not already interacting with a hold
+  // ─── HOLD PLACEMENT ────────────────────────────────────────────────────────
+  const placeHold = (clientX, clientY, target) => {
     if (!interactive || !onAddHold || !imageLoaded) return;
-    if (e.touches && e.touches.length > 1) return; // Ignore multi-touch
-    
-    // Check if we're clicking on a hold marker (it will have stopped propagation)
-    if (e.target !== containerRef.current && e.target !== imageRef.current) {
-      return;
-    }
+
+    // Don't place if clicking on a hold marker
+    if (target && target.closest && target.closest('[data-hold-marker]')) return;
+
+    // Only place if clicking on the container or image itself
+    if (target !== containerRef.current && target !== imageRef.current) return;
 
     const rect = containerRef.current.getBoundingClientRect();
-    const clientX = e.clientX || (e.touches && e.touches[0].clientX);
-    const clientY = e.clientY || (e.touches && e.touches[0].clientY);
-    
-    // Calculate position relative to container
     const containerX = clientX - rect.left;
     const containerY = clientY - rect.top;
-    
-    // Account for pan and zoom to get position in original image space
-    // The transform is: scale(s) translate(tx/s, ty/s)
-    // So we need to: (click - (tx/s)*s) / s = (click - tx) / s
+
     const imageX = (containerX - translateX) / scale;
     const imageY = (containerY - translateY) / scale;
-    
-    // Convert to percentage based on displayed image dimensions
-    const displayedWidth = rect.width;
-    const displayedHeight = rect.height;
-    const x = (imageX / displayedWidth) * 100;
-    const y = (imageY / displayedHeight) * 100;
+
+    const x = (imageX / rect.width) * 100;
+    const y = (imageY / rect.height) * 100;
 
     onAddHold({ x, y, type: activeHoldType || "middle", size: 28 });
   };
 
-  // Calculate transform for image
-  // Scale first, then translate - this makes panning feel natural (in screen pixels)
   const imageTransform = `scale(${scale}) translate(${translateX / scale}px, ${translateY / scale}px)`;
 
   return (
@@ -218,7 +267,7 @@ export default function WallCanvas({ imageUrl, holds, onAddHold, onRemoveHold, o
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
+      onMouseLeave={handleMouseLeave}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -252,7 +301,7 @@ export default function WallCanvas({ imageUrl, holds, onAddHold, onRemoveHold, o
 
       {interactive && imageLoaded && (
         <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-sm text-white/70 text-xs px-3 py-1.5 rounded-full">
-          Scroll to zoom · Drag with one finger to pan · Pinch with two fingers to zoom · Double-click to reset
+          Tap to place · Drag to pan · Pinch to zoom · Double-tap to reset
         </div>
       )}
       {interactive && imageLoaded && scale > 1 && (
