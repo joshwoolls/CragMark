@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { Plus, Minus, Trash2 } from "lucide-react";
 
@@ -23,83 +24,122 @@ const holdTypeColors = {
 const DEFAULT_SIZE = 28;
 const SIZE_SCALE = 0.5;
 
-export default function HoldMarker({ hold, index, onRemove, onUpdate, interactive = false, containerWidth, containerHeight, isSelected: externalIsSelected, onSelectionChange }) {
+export default function HoldMarker({ hold, index, onRemove, onUpdate, interactive = false, containerWidth, containerHeight }) {
   const [isSelected, setIsSelected] = useState(false);
-  const [isHovered, setIsHovered] = useState(false);
-  const [isResizing, setIsResizing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-  const [popupPosition, setPopupPosition] = useState("above");
+  const [popupPos, setPopupPos] = useState(null);
   const markerRef = useRef(null);
-  const lastYRef = useRef(0);
   const initialDragPos = useRef({ x: 0, y: 0 });
-
-  // Handle external selection changes
-  useEffect(() => {
-    if (externalIsSelected !== undefined) {
-      setIsSelected(externalIsSelected);
-    }
-  }, [externalIsSelected]);
+  const didDrag = useRef(false);
 
   const size = hold.size || DEFAULT_SIZE;
   const sizeInPixels = DEFAULT_SIZE + (size - 1) * SIZE_SCALE;
+  const POPUP_WIDTH = 260;
+  const POPUP_HEIGHT = 230;
+
+  // Calculate popup position when selected
+  useEffect(() => {
+    if (!isSelected || !markerRef.current) return;
+
+    const updatePos = () => {
+      const rect = markerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+
+      // Center horizontally, clamp to viewport
+      let left = rect.left + rect.width / 2 - POPUP_WIDTH / 2;
+      left = Math.max(8, Math.min(left, window.innerWidth - POPUP_WIDTH - 8));
+
+      // Prefer above, fall back to below, then clamp
+      let top;
+      if (rect.top >= POPUP_HEIGHT + 12) {
+        top = rect.top - POPUP_HEIGHT - 12;
+      } else if (window.innerHeight - rect.bottom >= POPUP_HEIGHT + 12) {
+        top = rect.bottom + 12;
+      } else {
+        top = Math.max(8, rect.top - POPUP_HEIGHT - 12);
+      }
+
+      setPopupPos({ top, left });
+    };
+
+    updatePos();
+    window.addEventListener("scroll", updatePos, true);
+    window.addEventListener("resize", updatePos);
+    return () => {
+      window.removeEventListener("scroll", updatePos, true);
+      window.removeEventListener("resize", updatePos);
+    };
+  }, [isSelected, sizeInPixels]);
+
+  // Deselect on outside click
+  useEffect(() => {
+    if (!isSelected) return;
+
+    const handleOutside = (e) => {
+      if (markerRef.current && !markerRef.current.contains(e.target)) {
+        // Also allow clicks inside the portal popup
+        const popup = document.getElementById(`hold-popup-${index}`);
+        if (popup && popup.contains(e.target)) return;
+        setIsSelected(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handleOutside, true);
+    return () => document.removeEventListener("pointerdown", handleOutside, true);
+  }, [isSelected, index]);
+
+  // Drag tracking
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handleMove = (e) => {
+      const clientX = e.clientX ?? e.touches?.[0]?.clientX ?? 0;
+      const clientY = e.clientY ?? e.touches?.[0]?.clientY ?? 0;
+
+      const dx = clientX - initialDragPos.current.x;
+      const dy = clientY - initialDragPos.current.y;
+
+      if (Math.hypot(dx, dy) > 3) didDrag.current = true;
+
+      if (!onUpdate || !containerWidth || !containerHeight) return;
+      const percentDx = (dx / containerWidth) * 100;
+      const percentDy = (dy / containerHeight) * 100;
+      onUpdate(index, { ...hold, x: hold.x + percentDx, y: hold.y + percentDy });
+      initialDragPos.current = { x: clientX, y: clientY };
+    };
+
+    const handleUp = () => setIsDragging(false);
+
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp);
+    window.addEventListener("touchmove", handleMove, { passive: false });
+    window.addEventListener("touchend", handleUp);
+
+    return () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+      window.removeEventListener("touchmove", handleMove);
+      window.removeEventListener("touchend", handleUp);
+    };
+  }, [isDragging, hold, index, onUpdate, containerWidth, containerHeight]);
 
   const handlePointerDown = (e) => {
-    if (!interactive || !onUpdate) return;
+    if (!interactive) return;
     e.preventDefault();
     e.stopPropagation();
-    setIsDragging(true);
+    didDrag.current = false;
     initialDragPos.current = { x: e.clientX, y: e.clientY };
+    setIsDragging(true);
   };
 
-  const handleTouchStart = (e) => {
-    if (!interactive || !onUpdate) return;
-    e.preventDefault();
+  const handleButtonClick = (e) => {
     e.stopPropagation();
-    if (e.touches.length === 1) {
-      setIsDragging(true);
-      initialDragPos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    if (!interactive) {
+      if (onRemove) onRemove(index);
+      return;
     }
-  };
-
-  const handleDragMove = (e) => {
-    if (!isDragging || !onUpdate || !containerWidth || !containerHeight) return;
-    const clientX = e.clientX || e.touches?.[0]?.clientX || 0;
-    const clientY = e.clientY || e.touches?.[0]?.clientY || 0;
-
-    const dx = clientX - initialDragPos.current.x;
-    const dy = clientY - initialDragPos.current.y;
-
-    const percentDx = (dx / containerWidth) * 100;
-    const percentDy = (dy / containerHeight) * 100;
-
-    onUpdate(index, { ...hold, x: hold.x + percentDx, y: hold.y + percentDy });
-    initialDragPos.current = { x: clientX, y: clientY };
-  };
-
-  const handlePointerUp = () => {
-    setIsResizing(false);
-    setIsDragging(false);
-  };
-
-  const handleTouchMove = (e) => {
-    if (!isDragging || !onUpdate) return;
-    e.preventDefault();
-    if (e.touches && e.touches.length > 0) {
-      handleDragMove(e);
-    }
-  };
-
-  const handleTouchEnd = () => {
-    setIsDragging(false);
-  };
-
-  const handleWheel = (e) => {
-    if (!interactive || !onUpdate || !isHovered) return;
-    e.preventDefault();
-    const delta = e.deltaY > 0 ? -2 : 2;
-    const newSize = Math.max(1, Math.min(100, (hold.size || DEFAULT_SIZE) + delta));
-    if (newSize !== (hold.size || DEFAULT_SIZE)) {
-      onUpdate(index, { ...hold, size: newSize });
+    if (!didDrag.current) {
+      setIsSelected(prev => !prev);
     }
   };
 
@@ -109,66 +149,17 @@ export default function HoldMarker({ hold, index, onRemove, onUpdate, interactiv
     onUpdate(index, { ...hold, size: newSize });
   };
 
-  const handleSelectHold = (e) => {
-    e.stopPropagation();
-    if (!interactive) {
-      if (onRemove) onRemove(index);
-      return;
-    }
-    setIsSelected(true);
-    if (onSelectionChange) {
-      onSelectionChange(index);
-    }
-  };
-
   const handleTypeChange = (newType) => {
     if (!interactive || !onUpdate) return;
     onUpdate(index, { ...hold, type: newType });
   };
 
-  React.useEffect(() => {
-    const handlePointerMoveWrapper = (e) => {
-      if (isDragging) handleDragMove(e);
-    };
-
-    const handlePointerUpWrapper = () => {
-      if (isResizing) setIsResizing(false);
-      if (isDragging) setIsDragging(false);
-    };
-
-    const handleTouchMoveWrapper = (e) => {
-      if (isDragging) handleDragMove(e);
-    };
-
-    const handleTouchEndWrapper = () => {
-      if (isResizing) setIsResizing(false);
-      if (isDragging) setIsDragging(false);
-    };
-
-    if (isResizing || isDragging) {
-      window.addEventListener("pointermove", handlePointerMoveWrapper);
-      window.addEventListener("pointerup", handlePointerUpWrapper);
-      window.addEventListener("touchmove", handleTouchMoveWrapper, { passive: false });
-      window.addEventListener("touchend", handleTouchEndWrapper);
-    }
-
-    return () => {
-      window.removeEventListener("pointermove", handlePointerMoveWrapper);
-      window.removeEventListener("pointerup", handlePointerUpWrapper);
-      window.removeEventListener("touchmove", handleTouchMoveWrapper);
-      window.removeEventListener("touchend", handleTouchEndWrapper);
-    };
-  }, [isResizing, isDragging, hold, index, onUpdate]);
-
   return (
     <div
       ref={markerRef}
-      data-hold-marker
-      className="absolute transform -translate-x-1/2 -translate-y-1/2 group"
-      style={{ left: `${hold.x}%`, top: `${hold.y}%` }}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      onWheel={handleWheel}
+      data-hold-marker="true"
+      className="absolute transform -translate-x-1/2 -translate-y-1/2"
+      style={{ left: `${hold.x}%`, top: `${hold.y}%`, zIndex: isSelected ? 50 : 1 }}
     >
       {/* Hold circle */}
       <button
@@ -176,12 +167,11 @@ export default function HoldMarker({ hold, index, onRemove, onUpdate, interactiv
           "relative rounded-full border-2 shadow-lg flex items-center justify-center transition-all duration-150 touch-none",
           holdColors[hold.type],
           interactive && "cursor-pointer hover:scale-110",
-          isSelected && "ring-2 ring-white ring-offset-2 ring-offset-zinc-950"
+          isSelected && "ring-2 ring-white ring-offset-1 ring-offset-zinc-950"
         )}
         style={{ width: `${sizeInPixels}px`, height: `${sizeInPixels}px` }}
-        onClick={handleSelectHold}
+        onClick={handleButtonClick}
         onPointerDown={handlePointerDown}
-        onTouchStart={handleTouchStart}
       >
         {holdLabels[hold.type] && (
           <span className="text-white text-[10px] font-bold leading-none">
@@ -204,28 +194,28 @@ export default function HoldMarker({ hold, index, onRemove, onUpdate, interactiv
         />
       )}
 
-      {/* Popup UI */}
-      {interactive && isSelected && (
+      {/* Popup rendered via portal to escape overflow:hidden */}
+      {interactive && isSelected && popupPos && createPortal(
         <div
-          className="absolute left-1/2 -translate-x-1/2 bg-zinc-800 border border-zinc-700 rounded-xl shadow-xl p-4 z-50 pointer-events-auto"
+          id={`hold-popup-${index}`}
+          className="bg-zinc-800 border border-zinc-700 rounded-xl shadow-xl p-4"
           style={{
-            bottom: "100%",
-            marginBottom: "12px",
-            minWidth: "280px",
+            position: "fixed",
+            top: popupPos.top,
+            left: popupPos.left,
+            width: POPUP_WIDTH,
+            zIndex: 9999,
           }}
+          onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
         >
-          {/* Resize controls */}
+          {/* Size controls */}
           <div className="mb-4">
             <p className="text-xs text-zinc-400 mb-2 font-medium">Size</p>
             <div className="flex items-center gap-3">
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  adjustSize(-5);
-                }}
+                onClick={(e) => { e.stopPropagation(); adjustSize(-5); }}
                 className="w-10 h-10 bg-zinc-700 hover:bg-zinc-600 rounded-lg flex items-center justify-center text-white transition-colors"
-                title="Decrease size"
               >
                 <Minus className="w-5 h-5" />
               </button>
@@ -233,12 +223,8 @@ export default function HoldMarker({ hold, index, onRemove, onUpdate, interactiv
                 <span className="text-sm text-white font-medium">{hold.size || DEFAULT_SIZE}</span>
               </div>
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  adjustSize(5);
-                }}
+                onClick={(e) => { e.stopPropagation(); adjustSize(5); }}
                 className="w-10 h-10 bg-zinc-700 hover:bg-zinc-600 rounded-lg flex items-center justify-center text-white transition-colors"
-                title="Increase size"
               >
                 <Plus className="w-5 h-5" />
               </button>
@@ -252,10 +238,7 @@ export default function HoldMarker({ hold, index, onRemove, onUpdate, interactiv
               {["start", "middle", "finish"].map((type) => (
                 <button
                   key={type}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleTypeChange(type);
-                  }}
+                  onClick={(e) => { e.stopPropagation(); handleTypeChange(type); }}
                   className={cn(
                     "flex-1 py-2 px-3 rounded-lg font-medium text-sm transition-colors",
                     hold.type === type
@@ -263,24 +246,22 @@ export default function HoldMarker({ hold, index, onRemove, onUpdate, interactiv
                       : "bg-zinc-700 hover:bg-zinc-600 text-zinc-300"
                   )}
                 >
-                  {type === "start" ? "Start" : type === "middle" ? "Middle" : "Finish"}
+                  {type.charAt(0).toUpperCase() + type.slice(1)}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Delete button */}
+          {/* Delete */}
           <button
-            onClick={(e) => {
-              e.stopPropagation();
-              if (onRemove) onRemove(index);
-            }}
+            onClick={(e) => { e.stopPropagation(); if (onRemove) onRemove(index); }}
             className="w-full py-2 px-3 bg-red-600 hover:bg-red-700 rounded-lg text-white font-medium text-sm transition-colors flex items-center justify-center gap-2"
           >
             <Trash2 className="w-4 h-4" />
             Delete
           </button>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

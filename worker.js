@@ -41,13 +41,15 @@ function isValidUuid(uuid) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uuid);
 }
 
+// Only these paths are exempt from JWT auth
+const PUBLIC_PATHS = ["/api/auth/signup", "/api/auth/login"];
+
 // Base64url encoding/decoding for proper JWT format
 function base64url(str) {
   return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
 function base64urlDecode(str) {
-  // Pad with = to make length a multiple of 4
   str = str.replace(/-/g, '+').replace(/_/g, '/');
   while (str.length % 4) str += '=';
   return atob(str);
@@ -129,7 +131,6 @@ async function verifyJwt(token, secret) {
       ["verify"]
     );
 
-    // Decode the base64url signature back to bytes
     const signatureBytes = Uint8Array.from(base64urlDecode(signatureB64), c => c.charCodeAt(0));
 
     const isValid = await crypto.subtle.verify(
@@ -155,7 +156,14 @@ export default {
       const path = url.pathname;
 
       // JWT Middleware
-      if (path.startsWith("/api/") && !path.startsWith("/api/auth/") && !path.startsWith("/api/images/")) {
+      // Public: /api/auth/signup, /api/auth/login
+      // Public: /api/images/* (served as <img src> tags, no auth header possible)
+      // Protected: everything else under /api/ including /api/auth/profile
+      const isApiRoute = path.startsWith("/api/");
+      const isPublicPath = PUBLIC_PATHS.includes(path);
+      const isImagePath = path.startsWith("/api/images/");
+
+      if (isApiRoute && !isPublicPath && !isImagePath) {
         const authHeader = request.headers.get("Authorization");
         if (!authHeader || !authHeader.startsWith("Bearer ")) {
           return errorJson("Unauthorized", 401);
@@ -181,57 +189,34 @@ export default {
         const siteId = request.user.site_id;
         const limit = Math.min(Number(url.searchParams.get("limit") || "100"), 500);
 
-        console.log("GET /api/routes - params:", { id, createdBy, published, siteId, limit });
-
         let sql = "SELECT * FROM routes WHERE 1=1";
         const binds = [];
 
-        if (id) {
-          sql += " AND id = ?";
-          binds.push(id);
-        }
-        if (createdBy) {
-          sql += " AND created_by = ?";
-          binds.push(createdBy);
-        }
-        if (published !== null) {
-          sql += " AND published = ?";
-          binds.push(published === "true" ? 1 : 0);
-        }
-        if (siteId) {
-          sql += " AND site_id = ?";
-          binds.push(siteId);
-        }
+        if (id) { sql += " AND id = ?"; binds.push(id); }
+        if (createdBy) { sql += " AND created_by = ?"; binds.push(createdBy); }
+        if (published !== null) { sql += " AND published = ?"; binds.push(published === "true" ? 1 : 0); }
+        if (siteId) { sql += " AND site_id = ?"; binds.push(siteId); }
 
         sql += " ORDER BY created_date DESC LIMIT ?";
         binds.push(limit);
 
-        if (id && !isValidUuid(id)) {
-          return errorJson("Invalid route ID format", 400);
-        }
-        if (siteId && !/^[a-zA-Z0-9_-]{3,}$/.test(siteId)) {
-          return errorJson("Invalid site ID format", 400);
-        }
+        if (id && !isValidUuid(id)) return errorJson("Invalid route ID format", 400);
+        if (siteId && !/^[a-zA-Z0-9_-]{3,}$/.test(siteId)) return errorJson("Invalid site ID format", 400);
 
         const result = await env.DB.prepare(sql).bind(...binds).all();
-        const routes = (result.results || []).map(mapRoute);
-        return json(routes);
+        return json((result.results || []).map(mapRoute));
       }
 
       if (path === "/api/routes" && request.method === "POST") {
         const body = await request.json();
         const now = new Date().toISOString();
 
-        console.log("POST /api/routes - body:", JSON.stringify(body, null, 2));
-
         if (!body?.name || typeof body.name !== "string") {
           return errorJson("Route name is required", 400);
         }
 
         const siteId = request.user.site_id;
-        if (!/^[a-zA-Z0-9_-]{3,}$/.test(siteId)) {
-          return errorJson("Invalid site ID format", 400);
-        }
+        if (!/^[a-zA-Z0-9_-]{3,}$/.test(siteId)) return errorJson("Invalid site ID format", 400);
 
         const route = {
           id: crypto.randomUUID(),
@@ -254,83 +239,36 @@ export default {
             wall_image_url, holds_json, published, created_by, created_date, site_id
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).bind(
-          route.id,
-          route.name,
-          route.grade,
-          route.style,
-          route.description,
-          route.setter_name,
-          route.wall_image_url,
-          route.holds_json,
-          route.published,
-          route.created_by,
-          route.created_date,
-          route.site_id
+          route.id, route.name, route.grade, route.style, route.description,
+          route.setter_name, route.wall_image_url, route.holds_json,
+          route.published, route.created_by, route.created_date, route.site_id
         ).run();
 
-        return json({
-          ...route,
-          holds: JSON.parse(route.holds_json),
-          published: !!route.published
-        }, 201);
+        return json({ ...route, holds: JSON.parse(route.holds_json), published: !!route.published }, 201);
       }
 
       if (path.startsWith("/api/routes/") && request.method === "PUT") {
         const id = path.split("/").pop();
         const body = await request.json();
 
-        if (!id || !isValidUuid(id)) {
-          return errorJson("Invalid route ID", 400);
-        }
+        if (!id || !isValidUuid(id)) return errorJson("Invalid route ID", 400);
+        if (!body?.name || typeof body.name !== "string") return errorJson("Route name is required", 400);
+        if (body.site_id && !/^[a-zA-Z0-9_-]{3,}$/.test(body.site_id)) return errorJson("Invalid site ID format", 400);
 
-        if (!body?.name || typeof body.name !== "string") {
-          return errorJson("Route name is required", 400);
-        }
-
-        if (body.site_id && !/^[a-zA-Z0-9_-]{3,}$/.test(body.site_id)) {
-          return errorJson("Invalid site ID format", 400);
-        }
-
-        const existing = await env.DB.prepare(
-          "SELECT * FROM routes WHERE id = ?"
-        ).bind(id).first();
-
-        if (!existing) {
-          return errorJson("Not found", 404);
-        }
-
-        if (request.user.site_id !== existing.site_id) {
-          return errorJson("Cannot update route for different site", 403);
-        }
+        const existing = await env.DB.prepare("SELECT * FROM routes WHERE id = ?").bind(id).first();
+        if (!existing) return errorJson("Not found", 404);
+        if (request.user.site_id !== existing.site_id) return errorJson("Cannot update route for different site", 403);
 
         await env.DB.prepare(`
-          UPDATE routes
-          SET
-            name = ?,
-            grade = ?,
-            style = ?,
-            description = ?,
-            setter_name = ?,
-            wall_image_url = ?,
-            holds_json = ?,
-            published = ?
-          WHERE id = ?
+          UPDATE routes SET name=?, grade=?, style=?, description=?, setter_name=?,
+          wall_image_url=?, holds_json=?, published=? WHERE id=?
         `).bind(
-          body.name,
-          body.grade ?? null,
-          body.style ?? null,
-          body.description ?? null,
-          body.setter_name ?? null,
-          body.wall_image_url ?? null,
-          JSON.stringify(body.holds || []),
-          body.published ? 1 : 0,
-          id
+          body.name, body.grade ?? null, body.style ?? null, body.description ?? null,
+          body.setter_name ?? null, body.wall_image_url ?? null,
+          JSON.stringify(body.holds || []), body.published ? 1 : 0, id
         ).run();
 
-        const updated = await env.DB.prepare(
-          "SELECT * FROM routes WHERE id = ?"
-        ).bind(id).first();
-
+        const updated = await env.DB.prepare("SELECT * FROM routes WHERE id = ?").bind(id).first();
         if (!updated) return errorJson("Not found", 404);
         return json(mapRoute(updated));
       }
@@ -338,89 +276,54 @@ export default {
       if (path.startsWith("/api/routes/") && request.method === "DELETE") {
         const id = path.split("/").pop();
 
-        if (!id || !isValidUuid(id)) {
-          return errorJson("Invalid route ID", 400);
-        }
+        if (!id || !isValidUuid(id)) return errorJson("Invalid route ID", 400);
 
-        const existing = await env.DB.prepare(
-          "SELECT * FROM routes WHERE id = ?"
-        ).bind(id).first();
-
-        if (!existing) {
-          return errorJson("Not found", 404);
-        }
-
-        if (request.user.site_id !== existing.site_id) {
-          return errorJson("Cannot delete route for different site", 403);
-        }
+        const existing = await env.DB.prepare("SELECT * FROM routes WHERE id = ?").bind(id).first();
+        if (!existing) return errorJson("Not found", 404);
+        if (request.user.site_id !== existing.site_id) return errorJson("Cannot delete route for different site", 403);
 
         const imageKey = getImageKeyFromUrl(existing.wall_image_url);
-
         await env.DB.prepare("DELETE FROM routes WHERE id = ?").bind(id).run();
-
-        if (imageKey && env.ROUTE_IMAGES) {
-          await env.ROUTE_IMAGES.delete(imageKey);
-        }
+        if (imageKey && env.ROUTE_IMAGES) await env.ROUTE_IMAGES.delete(imageKey);
 
         return json({ success: true });
       }
 
       if (path === "/api/upload" && request.method === "POST") {
-        if (!env.ROUTE_IMAGES) {
-          return errorJson("R2 bucket binding ROUTE_IMAGES is not configured", 500);
-        }
+        if (!env.ROUTE_IMAGES) return errorJson("R2 bucket binding ROUTE_IMAGES is not configured", 500);
 
         const formData = await request.formData();
         const file = formData.get("file");
-
-        if (!(file instanceof File)) {
-          return errorJson("No file uploaded", 400);
-        }
+        if (!(file instanceof File)) return errorJson("No file uploaded", 400);
 
         const safeName = sanitizeFilename(file.name || "upload.bin");
         const key = `routes/${crypto.randomUUID()}-${safeName}`;
 
         await env.ROUTE_IMAGES.put(key, await file.arrayBuffer(), {
-          httpMetadata: {
-            contentType: file.type || "application/octet-stream"
-          }
+          httpMetadata: { contentType: file.type || "application/octet-stream" }
         });
 
-        return json({
-          file_key: key,
-          file_url: `/api/images/${key}`
-        }, 201);
+        return json({ file_key: key, file_url: `/api/images/${key}` }, 201);
       }
 
       if (path.startsWith("/api/images/") && request.method === "GET") {
-        if (!env.ROUTE_IMAGES) {
-          return new Response("R2 bucket not configured", { status: 500 });
-        }
+        if (!env.ROUTE_IMAGES) return new Response("R2 bucket not configured", { status: 500 });
 
         const cache = caches.default;
         const cacheKey = new Request(request.url, request);
         const cached = await cache.match(cacheKey);
-        if (cached) {
-          return cached;
-        }
+        if (cached) return cached;
 
         const key = decodeURIComponent(path.replace("/api/images/", ""));
         const object = await env.ROUTE_IMAGES.get(key);
-
-        if (!object) {
-          return new Response("Not found", { status: 404 });
-        }
+        if (!object) return new Response("Not found", { status: 404 });
 
         const headers = new Headers();
         object.writeHttpMetadata(headers);
         headers.set("etag", object.httpEtag);
         headers.set("cache-control", "public, max-age=31536000, immutable");
 
-        const response = new Response(object.body, {
-          status: 200,
-          headers
-        });
-
+        const response = new Response(object.body, { status: 200, headers });
         await cache.put(cacheKey, response.clone());
         return response;
       }
@@ -433,13 +336,8 @@ export default {
           return errorJson("Username, password, and site ID are required", 400);
         }
 
-        const existingUser = await env.DB.prepare(
-          "SELECT id FROM users WHERE username = ?"
-        ).bind(username).first();
-
-        if (existingUser) {
-          return errorJson("Username already exists", 409);
-        }
+        const existingUser = await env.DB.prepare("SELECT id FROM users WHERE username = ?").bind(username).first();
+        if (existingUser) return errorJson("Username already exists", 409);
 
         const salt = crypto.randomUUID();
         const password_hash = `${salt}:${await hashPassword(password, salt)}`;
@@ -448,9 +346,7 @@ export default {
           "INSERT INTO users (username, password_hash, site_id) VALUES (?, ?, ?)"
         ).bind(username, password_hash, site_id).run();
 
-        if (!success) {
-          return errorJson("Failed to create user", 500);
-        }
+        if (!success) return errorJson("Failed to create user", 500);
 
         const user = await env.DB.prepare(
           "SELECT id, username, site_id FROM users WHERE username = ?"
@@ -467,22 +363,16 @@ export default {
         const body = await request.json();
         const { username, password } = body;
 
-        if (!username || !password) {
-          return errorJson("Username and password are required", 400);
-        }
+        if (!username || !password) return errorJson("Username and password are required", 400);
 
         const user = await env.DB.prepare(
           "SELECT id, username, password_hash, site_id FROM users WHERE username = ?"
         ).bind(username).first();
 
-        if (!user) {
-          return errorJson("Invalid credentials", 401);
-        }
+        if (!user) return errorJson("Invalid credentials", 401);
 
         const [salt, storedHash] = user.password_hash.split(":");
-        if (!await verifyPassword(password, salt, storedHash)) {
-          return errorJson("Invalid credentials", 401);
-        }
+        if (!await verifyPassword(password, salt, storedHash)) return errorJson("Invalid credentials", 401);
 
         const token = await generateJwt(
           { id: user.id, username: user.username, site_id: user.site_id },
@@ -491,6 +381,7 @@ export default {
         return json({ token });
       }
 
+      // Protected by JWT middleware above — request.user is guaranteed here
       if (path === "/api/auth/profile" && request.method === "PUT") {
         const body = await request.json();
         const { site_id } = body;
@@ -499,25 +390,15 @@ export default {
           return errorJson("Invalid site ID format", 400);
         }
 
-        // Ensure the user is authenticated (middleware already handles 401)
-        if (!request.user || !request.user.id) {
-          return errorJson("Unauthorized", 401);
-        }
-
-        // Update the user's site_id in the database
-        const { success } = await env.DB.prepare(
+        await env.DB.prepare(
           "UPDATE users SET site_id = ? WHERE id = ?"
         ).bind(site_id, request.user.id).run();
 
-        if (!success) {
-          return errorJson("Failed to update site ID", 500);
-        }
-
-        // Generate a new JWT token with the updated site_id
-        const updatedUser = { ...request.user, site_id };
-        const newToken = await generateJwt(updatedUser, env.JWT_SECRET);
-
-        return json({ token: newToken });
+        const token = await generateJwt(
+          { id: request.user.id, username: request.user.username, site_id },
+          env.JWT_SECRET
+        );
+        return json({ token });
       }
 
       return env.ASSETS.fetch(request);
