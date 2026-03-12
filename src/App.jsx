@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import { SiteIdProvider, useSiteId } from '@/lib/SiteIdContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import SiteIdEntry from '@/pages/SiteIdEntry';
+import { ApiError } from '@/api/base44client.js';
 
 const { Pages, Layout, mainPage } = pagesConfig;
 const mainPageKey = mainPage ?? Object.keys(Pages)[0];

@@ -1,3 +1,12 @@
+class ApiError extends Error {
+  constructor(status, message, data = null) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.data = data;
+  }
+}
+
 async function api(path, options = {}) {
   const headers = { ...(options.headers || {}) };
 
@@ -13,7 +22,13 @@ async function api(path, options = {}) {
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`API ${res.status}: ${text}`);
+    let data = null;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      // Not JSON, just use text
+    }
+    throw new ApiError(res.status, `API ${res.status}: ${data?.error || text}`, data);
   }
 
   return res.json();

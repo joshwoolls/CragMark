@@ -22,10 +22,13 @@ export const AuthProvider = ({ children }) => {
       await checkUserAuth();
     } catch (error) {
       console.error('App state check failed:', error);
-      setAuthError({
-        type: 'unknown',
-        message: error.message || 'An unexpected error occurred'
-      });
+      if (error.status === 401) {
+        setAuthError({ type: 'auth_required', message: error.message });
+      } else if (error.status === 403 && error.data?.error === 'user_not_registered') {
+        setAuthError({ type: 'user_not_registered', message: error.message });
+      } else {
+        setAuthError({ type: 'unknown', message: error.message || 'An unexpected error occurred' });
+      }
     }
   };
 
@@ -40,6 +43,13 @@ export const AuthProvider = ({ children }) => {
       console.error('User auth check failed:', error);
       setIsLoadingAuth(false);
       setIsAuthenticated(false);
+      if (error.status === 401) {
+        setAuthError({ type: 'auth_required', message: error.message });
+      } else if (error.status === 403 && error.data?.error === 'user_not_registered') {
+        setAuthError({ type: 'user_not_registered', message: error.message });
+      } else {
+        setAuthError({ type: 'unknown', message: error.message || 'An unexpected error occurred' });
+      }
     }
   };
 

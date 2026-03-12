@@ -37,6 +37,10 @@ function sanitizeFilename(name = "upload.bin") {
   return name.replace(/[^a-zA-Z0-9._-]/g, "_");
 }
 
+function isValidUuid(uuid) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uuid);
+}
+
 export default {
   async fetch(request, env) {
     try {
@@ -75,11 +79,15 @@ export default {
         sql += " ORDER BY created_date DESC LIMIT ?";
         binds.push(limit);
 
-        console.log("GET /api/routes - sql:", sql, "binds:", binds);
+        if (id && !isValidUuid(id)) {
+          return errorJson("Invalid route ID format", 400);
+        }
+        if (siteId && !/^[a-zA-Z0-9_-]{3,}$/.test(siteId)) { // Example: alphanumeric, _, - min 3 chars
+          return errorJson("Invalid site ID format", 400);
+        }
 
         const result = await env.DB.prepare(sql).bind(...binds).all();
         const routes = (result.results || []).map(mapRoute);
-        console.log("GET /api/routes - returned", routes.length, "routes");
         return json(routes);
       }
 
@@ -95,6 +103,9 @@ export default {
 
         // Use provided site_id or default to "default"
         const siteId = body.site_id || "default";
+        if (!/^[a-zA-Z0-9_-]{3,}$/.test(siteId)) {
+          return errorJson("Invalid site ID format", 400);
+        }
 
         const route = {
           id: crypto.randomUUID(),
@@ -110,8 +121,6 @@ export default {
           created_date: now,
           site_id: siteId
         };
-
-        console.log("Inserting route:", route);
 
         await env.DB.prepare(`
           INSERT INTO routes (
@@ -144,12 +153,16 @@ export default {
         const id = path.split("/").pop();
         const body = await request.json();
 
-        if (!id) {
-          return errorJson("Route id is required", 400);
+        if (!id || !isValidUuid(id)) {
+          return errorJson("Invalid route ID", 400);
         }
 
         if (!body?.name || typeof body.name !== "string") {
           return errorJson("Route name is required", 400);
+        }
+
+        if (body.site_id && !/^[a-zA-Z0-9_-]{3,}$/.test(body.site_id)) {
+          return errorJson("Invalid site ID format", 400);
         }
 
         // Get existing route to check site_id
@@ -201,8 +214,8 @@ export default {
       if (path.startsWith("/api/routes/") && request.method === "DELETE") {
         const id = path.split("/").pop();
 
-        if (!id) {
-          return errorJson("Route id is required", 400);
+        if (!id || !isValidUuid(id)) {
+          return errorJson("Invalid route ID", 400);
         }
 
         const existing = await env.DB.prepare(
@@ -294,10 +307,9 @@ export default {
 
       return env.ASSETS.fetch(request);
     } catch (err) {
-      console.error(err);
-      return errorJson("Internal server error", 500, {
-        details: err?.message || String(err)
-      });
+      console.error("Internal server error:", err);
+      return errorJson("Internal server error", 500);
+    }
     }
   }
 };
